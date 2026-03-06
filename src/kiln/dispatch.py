@@ -20,12 +20,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from kiln.assessor import assess_and_allocate
 from beads import (
     BeadStore,
     MergeQueueItem,
     PRBead,
 )
+
+from kiln.assessor import assess_and_allocate
 from kiln.config import Config
 from kiln.gh import _gh
 from kiln.logger import Logger
@@ -223,6 +224,25 @@ class RollingDispatcher:
             upgraded=allocation.upgraded,
         )
 
+        # Create isolated workspace, clone repo, create branch
+        import tempfile
+
+        from kiln.graph.handlers.build import _setup_workspace
+
+        workspace = Path(tempfile.mkdtemp(prefix=f"kiln-{issue_number}-"))
+        setup_error = _setup_workspace(workspace, self._config.repo, branch, [])
+        if setup_error:
+            self._logger.error(
+                f"workspace setup failed for #{issue_number}: {setup_error}",
+                issue_number=issue_number,
+            )
+            bead.state = "open"  # type: ignore
+            bead.branch = None
+            bead.retry_count += 1
+            self._store.write_work_bead(bead)
+            _unclaim_issue(self._config.repo, issue_number)
+            return
+
         # Build the agent prompt
         prompt = build_agent_prompt(
             issue_number=issue_number,
@@ -230,12 +250,8 @@ class RollingDispatcher:
             issue_body=issue_data.get("body", ""),
             branch=branch,
             repo=self._config.repo,
+            workspace_ready=True,
         )
-
-        # Create isolated workspace for this agent
-        import tempfile
-
-        workspace = Path(tempfile.mkdtemp(prefix=f"kiln-{issue_number}-"))
 
         # Launch async task
         task = asyncio.create_task(
