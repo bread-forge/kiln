@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from beads import GraphNode
+
 from kiln.cli import _format_validate_state
 
 

@@ -251,9 +251,7 @@ class TestGhAuthTimeout:
         with (
             patch("subprocess.run", side_effect=fake_run),
             patch("shutil.which", return_value="/usr/bin/tool"),
-            patch.dict(
-                os.environ, {"KILN_GH_TOKEN": "tok", "ANTHROPIC_API_KEY": "x"}, clear=True
-            ),
+            patch.dict(os.environ, {"KILN_GH_TOKEN": "tok", "ANTHROPIC_API_KEY": "x"}, clear=True),
         ):
             report = run_health_checks("owner/repo")
 
@@ -284,9 +282,7 @@ class TestRepoAccessTimeout:
         with (
             patch("subprocess.run", side_effect=fake_run),
             patch("shutil.which", return_value="/usr/bin/tool"),
-            patch.dict(
-                os.environ, {"KILN_GH_TOKEN": "tok", "ANTHROPIC_API_KEY": "x"}, clear=True
-            ),
+            patch.dict(os.environ, {"KILN_GH_TOKEN": "tok", "ANTHROPIC_API_KEY": "x"}, clear=True),
         ):
             report = run_health_checks("owner/repo")
 

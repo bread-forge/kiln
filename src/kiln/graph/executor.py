@@ -15,6 +15,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from beads.types import GraphNode, NodeType
+
 from kiln.graph.node import BackendRouter, NodeHandler, NodeResult
 
 # Gate node types: abandonment means "gate not held — proceed anyway", not "work failed".
@@ -23,6 +24,7 @@ _GATE_TYPES: frozenset[str] = frozenset({"wait", "consensus"})
 
 if TYPE_CHECKING:
     from beads.store import BeadStore
+
     from kiln.config import Config
     from kiln.logger import Logger
 

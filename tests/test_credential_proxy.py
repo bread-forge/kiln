@@ -25,8 +25,8 @@ import time
 from dataclasses import dataclass, field
 
 import pytest
-
 from beads.types import GraphNode
+
 from kiln.config import Config
 
 # ---------------------------------------------------------------------------

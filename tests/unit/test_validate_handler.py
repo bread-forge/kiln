@@ -301,9 +301,7 @@ class TestValidateHandlerEscalation:
                 "fix_cycles": {"pytest tests/": MAX_FIX_CYCLES - 1},
             }
         )
-        with patch(
-            "kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")
-        ):
+        with patch("kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")):
             result = asyncio.run(ValidateHandler().execute(node, _config()))
         assert len(result.output["bug_nodes"]) == 1
 
@@ -344,9 +342,7 @@ class TestValidateHandlerEscalation:
 
     def test_fix_cycles_persisted_in_node_context(self) -> None:
         node = _node({"assertions": ["pytest tests/"], "fix_cycles": {}})
-        with patch(
-            "kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")
-        ):
+        with patch("kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")):
             asyncio.run(ValidateHandler().execute(node, _config()))
         # cycle counter incremented from 0 → 1
         assert node.context["fix_cycles"]["pytest tests/"] == 1
@@ -425,9 +421,7 @@ class TestValidateHandlerLogger:
     def test_logger_called_on_failure(self) -> None:
         logger = MagicMock()
         node = _node({"assertions": ["false"]})
-        with patch(
-            "kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")
-        ):
+        with patch("kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")):
             asyncio.run(ValidateHandler(logger=logger).execute(node, _config()))
         assert logger.info.called
 

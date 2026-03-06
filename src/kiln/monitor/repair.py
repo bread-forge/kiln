@@ -11,6 +11,7 @@ from kiln.monitor.anomaly import AnomalyBead, AnomalyKind
 
 if TYPE_CHECKING:
     from beads.store import BeadStore
+
     from kiln.config import Config
     from kiln.logger import Logger
 

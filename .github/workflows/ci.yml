@@ -16,6 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check out beads (path dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: bread-forge/beads
+          path: _beads
+
+      - name: Link beads as sibling directory
+        run: ln -s $GITHUB_WORKSPACE/_beads ../beads
+
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:

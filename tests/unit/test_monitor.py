@@ -4,8 +4,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from beads import BeadStore, WorkBead
+
 from kiln.monitor import AnomalyKind, AnomalyStore, _detect_anomalies
 
 

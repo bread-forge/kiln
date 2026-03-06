@@ -6,6 +6,7 @@ import json
 from datetime import UTC, datetime
 
 from beads.store import BeadStore
+
 from kiln.gh import _gh
 from kiln.monitor.anomaly import AnomalyBead, AnomalyKind
 

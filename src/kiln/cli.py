@@ -36,10 +36,10 @@ if TYPE_CHECKING:
     from kiln.graph.executor import ExecutionGraph
 
 import typer  # noqa: E402
+from beads import BeadStore, GraphNode  # noqa: E402
 from rich.console import Console, Group  # noqa: E402
 from rich.table import Table  # noqa: E402
 
-from beads import BeadStore, GraphNode  # noqa: E402
 from kiln.config import Config, Registry, RepoEntry  # noqa: E402
 from kiln.health import run_health_checks  # noqa: E402
 from kiln.logger import Logger  # noqa: E402
@@ -1456,9 +1456,7 @@ def repo_list() -> None:
     registry = Registry()
     repos = registry.list()
     if not repos:
-        console.print(
-            "No repos registered. Use: kiln repo add <owner/repo> --local-path <path>"
-        )
+        console.print("No repos registered. Use: kiln repo add <owner/repo> --local-path <path>")
         return
 
     table = Table(title="Platform Repo Registry")
@@ -1863,15 +1861,7 @@ def _launch_dashboard_tui() -> None:
 
     def _bead_path(repo: str, node_id: str) -> Path:
         parts = repo.split("/", 1)
-        return (
-            Path.home()
-            / ".kiln"
-            / "beads"
-            / parts[0]
-            / parts[1]
-            / "graph"
-            / f"{node_id}.json"
-        )
+        return Path.home() / ".kiln" / "beads" / parts[0] / parts[1] / "graph" / f"{node_id}.json"
 
     class NodeDetailScreen(ModalScreen):
         BINDINGS = [
@@ -1979,6 +1969,7 @@ def _launch_dashboard_tui() -> None:
             rows = _collect_dashboard_rows()
             default_expanded = {repo for repo, _, _ in rows}
             self._populate(restore_expanded=default_expanded)
+            self.set_interval(30, self.action_refresh)
 
         def _expanded_keys(self) -> set[str]:
             """Collect plain-text keys of expanded non-leaf nodes."""

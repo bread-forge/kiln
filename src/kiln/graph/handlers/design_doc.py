@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from beads.types import GraphNode, PlanArtifact
+
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:

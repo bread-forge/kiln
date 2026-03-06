@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from beads.types import GraphNode
+
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:

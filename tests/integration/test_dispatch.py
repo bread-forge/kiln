@@ -4,8 +4,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from beads import BeadStore, WorkBead
+
 from kiln.config import Config
 from kiln.dispatch import RollingDispatcher
 from kiln.logger import Logger
@@ -56,6 +56,7 @@ class TestRollingDispatcher:
             patch("kiln.dispatch._get_pr_number") as mock_pr,
             patch("kiln.dispatch._claim_issue"),
             patch("kiln.dispatch._unclaim_issue"),
+            patch("kiln.graph.handlers.build._setup_workspace", return_value=None),
             patch("kiln.dispatch.run_agent", new_callable=AsyncMock) as mock_run,
             patch("kiln.dispatch.assess_and_allocate", new_callable=AsyncMock) as mock_assess,
         ):
@@ -94,6 +95,7 @@ class TestRollingDispatcher:
             patch("kiln.dispatch._claim_issue"),
             patch("kiln.dispatch._unclaim_issue"),
             patch("kiln.dispatch._post_comment"),
+            patch("kiln.graph.handlers.build._setup_workspace", return_value=None),
             patch("kiln.dispatch.assess_and_allocate") as mock_assess,
             patch("kiln.dispatch.run_agent") as mock_run,
         ):

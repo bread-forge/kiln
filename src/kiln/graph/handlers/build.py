@@ -13,15 +13,17 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from beads.types import GraphNode, MergeQueueItem, PRBead
+
 from kiln.agents.assessor import assess_and_allocate, assess_from_plan_artifact
 from kiln.agents.prompts import build_agent_prompt
 from kiln.agents.runner import run_agent
-from beads.types import GraphNode, MergeQueueItem, PRBead
 from kiln.gh import _gh
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:
     from beads.store import BeadStore
+
     from kiln.config import Config
     from kiln.logger import Logger
 

@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from beads.types import GraphNode
+
 from kiln.config import Config
 from kiln.gh import _gh
 from kiln.graph.node import NodeResult
@@ -35,6 +36,7 @@ MAX_REPAIR_ATTEMPTS = 2
 
 if TYPE_CHECKING:
     from beads.store import BeadStore
+
     from kiln.logger import Logger
 
 

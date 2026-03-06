@@ -46,9 +46,7 @@ class Config:
             concurrency=int(os.environ.get("KILN_CONCURRENCY", "3")),
             model=os.environ.get("KILN_MODEL", "claude-sonnet-4-6"),
             agent_timeout_minutes=int(os.environ.get("KILN_AGENT_TIMEOUT_MINUTES", "60")),
-            watchdog_interval_seconds=int(
-                os.environ.get("KILN_WATCHDOG_INTERVAL_SECONDS", "60")
-            ),
+            watchdog_interval_seconds=int(os.environ.get("KILN_WATCHDOG_INTERVAL_SECONDS", "60")),
             max_retries=int(os.environ.get("KILN_MAX_RETRIES", "3")),
             beads_dir=Path(
                 os.environ.get(

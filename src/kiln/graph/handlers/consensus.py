@@ -24,10 +24,12 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from beads.types import GraphNode
+
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:
     from beads.store import BeadStore
+
     from kiln.config import Config
     from kiln.logger import Logger
 
