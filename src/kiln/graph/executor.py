@@ -52,7 +52,9 @@ class ExecutionGraph:
     def get_ready(self) -> list[GraphNode]:
         """Return pending nodes whose dependencies are all done/abandoned."""
         terminal: set[str] = {
-            nid for nid, n in self._nodes.items() if n.state in ("done", "abandoned")
+            nid
+            for nid, n in self._nodes.items()
+            if n.state in ("done", "abandoned", "already-done")
         }
         ready = []
         for node in self._nodes.values():
@@ -185,7 +187,12 @@ class GraphExecutor:
                 continue
             seen.add(node.id)
             existing = self._store.read_node(node.id)
-            if not existing or existing.state not in ("done", "abandoned", "wont-do"):
+            if not existing or existing.state not in (
+                "done",
+                "abandoned",
+                "wont-do",
+                "already-done",
+            ):
                 continue
             node.state = existing.state  # type: ignore[assignment]
             if existing.state == "wont-do":
@@ -197,7 +204,7 @@ class GraphExecutor:
                 node.state = "pending"  # type: ignore[assignment]
                 self._store.write_node(node)
                 continue
-            # state == "done"
+            # state == "done" or "already-done" — terminal success, don't re-dispatch
             node.output = existing.output
             result.done.append(node.id)
             # Replay plan node expansion so dependents are in the graph
@@ -418,7 +425,7 @@ class GraphExecutor:
                             self._store.write_node(n)
 
         if result.success:
-            node.state = "done"  # type: ignore[assignment]
+            node.state = "already-done" if result.already_done else "done"  # type: ignore[assignment]
             exec_result.done.append(node.id)
             # In dry-run mode nothing is persisted — a real run must start fresh.
             if self._dry_run:

@@ -37,6 +37,14 @@ def _get_pr_number(repo: str, branch: str) -> int | None:
         return None
 
 
+def _is_issue_closed(repo: str, issue_number: int) -> bool:
+    r = _gh("issue", "view", str(issue_number), "--repo", repo, "--json", "state")
+    try:
+        return json.loads(r.stdout).get("state", "").upper() == "CLOSED"
+    except (json.JSONDecodeError, AttributeError):
+        return False
+
+
 def _claim_issue(repo: str, issue_number: int) -> None:
     _gh(
         "issue",
@@ -299,6 +307,22 @@ class BuildHandler:
                     break
 
         if not pr_number:
+            if issue_number and _is_issue_closed(repo, issue_number):
+                _gh(
+                    "issue",
+                    "comment",
+                    str(issue_number),
+                    "--repo",
+                    repo,
+                    "--body",
+                    "Work already present in codebase; kiln marking node already-done.",
+                )
+                _unclaim_issue(repo, issue_number)
+                return NodeResult(
+                    success=True,
+                    already_done=True,
+                    output={"already_done": True, "branch": branch},
+                )
             if issue_number:
                 _unclaim_issue(repo, issue_number)
             return NodeResult(success=False, error="agent completed but no PR found")

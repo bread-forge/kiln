@@ -58,7 +58,7 @@ class NodeResult:
     duplicate PR detected).
     """
 
-    __slots__ = ("success", "output", "error", "abandon", "cost_usd")
+    __slots__ = ("success", "output", "error", "abandon", "already_done", "cost_usd")
 
     def __init__(
         self,
@@ -66,12 +66,14 @@ class NodeResult:
         output: dict[str, Any] | None = None,
         error: str | None = None,
         abandon: bool = False,
+        already_done: bool = False,
         cost_usd: float | None = None,
     ) -> None:
         self.success = success
         self.output = output or {}
         self.error = error
         self.abandon = abandon
+        self.already_done = already_done
         self.cost_usd = cost_usd
 
     def __repr__(self) -> str:

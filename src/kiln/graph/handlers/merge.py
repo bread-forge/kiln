@@ -357,6 +357,12 @@ Address every comment. Do not ignore any reviewer feedback."""
             build_node_id = node.context.get("build_node_id")
             if build_node_id and self._store:
                 build_node = self._store.read_node(build_node_id)
+                if build_node and build_node.state == "already-done":
+                    return NodeResult(
+                        success=True,
+                        already_done=True,
+                        output={"already_done": True},
+                    )
                 if build_node and build_node.state == "abandoned":
                     return NodeResult(
                         success=False,

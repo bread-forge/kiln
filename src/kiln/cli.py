@@ -1063,6 +1063,7 @@ def _build_status_table(
             "pending": "dim",
             "running": "yellow",
             "done": "green",
+            "already-done": "cyan",
             "failed": "red",
             "abandoned": "red",
             "wont-do": "dim",
@@ -1841,6 +1842,7 @@ def _launch_dashboard_tui() -> None:
 
     _STATE_COLOR = {
         "done": "green",
+        "already-done": "cyan",
         "running": "cyan",
         "pending": "yellow",
         "abandoned": "red",
@@ -2461,6 +2463,7 @@ _NODE_STATE_COLORS = {
     "pending": "dim",
     "running": "yellow",
     "done": "green",
+    "already-done": "cyan",
     "failed": "red",
     "abandoned": "red",
     "wont-do": "dim",
