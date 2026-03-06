@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from beads.types import GraphNode
 
+from kiln.agents.prompts import readme_agent_prompt
 from kiln.agents.runner import run_agent
 from kiln.graph.node import NodeResult
 
@@ -22,41 +23,6 @@ if TYPE_CHECKING:
     from kiln.logger import Logger
 
 
-def _readme_prompt(repo: str, milestone: str, plan_artifact: dict) -> str:
-    approach = plan_artifact.get("approach", "")
-    modules = plan_artifact.get("modules", [])
-    files_per_module = plan_artifact.get("files_per_module", {})
-
-    module_lines = []
-    for mod in modules:
-        files = files_per_module.get(mod, [])
-        module_lines.append(f"- **{mod}**: {', '.join(files)}")
-    modules_text = "\n".join(module_lines)
-
-    return f"""You are writing the README.md for the GitHub repo `{repo}` after a completed implementation milestone: `{milestone}`.
-
-Implementation summary:
-{approach}
-
-Modules and files:
-{modules_text}
-
-Steps:
-1. Clone the repo: `gh repo clone {repo} .`
-2. Read the existing source files to understand what was built.
-3. Write a clear, concise README.md at the repo root. Include:
-   - Project name and one-line description
-   - What it does (2-3 sentences)
-   - How to install / run (based on pyproject.toml if present)
-   - Module overview (one line per module)
-   - How to run tests
-4. Create a branch: `git checkout -b docs/readme`
-5. `git add README.md && git commit -m "docs: add README"`
-6. `git push -u origin docs/readme`
-7. `gh pr create --repo {repo} --title "docs: add README" --body "Auto-generated README for {milestone}"`
-8. Wait for CI: `gh pr checks <PR-number> --watch --repo {repo}`
-9. Squash merge: `gh pr merge <PR-number> --repo {repo} --squash --delete-branch`
-"""
 
 
 class ReadmeHandler:
@@ -75,7 +41,7 @@ class ReadmeHandler:
         milestone = node.context.get("milestone", "")
         plan_artifact = node.context.get("plan_artifact", {})
 
-        prompt = _readme_prompt(repo, milestone, plan_artifact)
+        prompt = readme_agent_prompt(repo, milestone, plan_artifact)
         workspace = Path(tempfile.mkdtemp(prefix=f"kiln-readme-{milestone}-"))
 
         result = await run_agent(

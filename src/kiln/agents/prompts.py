@@ -1,4 +1,4 @@
-"""Agent prompt templates — build, research, and plan prompts."""
+"""Agent prompt templates — build, readme, research, and plan prompts."""
 
 from __future__ import annotations
 
@@ -120,6 +120,54 @@ Example comment:
   `gh issue comment {issue_number} --repo {repo} --body "Most of this was already implemented in PR #X (module-foo) and PR #Y (module-bar). The remaining gap was [describe]. This PR adds [describe]."`
 
 Do this BEFORE creating the PR so the context is visible on the issue."""
+
+
+# ---------------------------------------------------------------------------
+# Readme agent prompt
+# ---------------------------------------------------------------------------
+
+
+def readme_agent_prompt(repo: str, milestone: str, plan_artifact: dict) -> str:
+    """Build the sub-agent prompt for writing a milestone README."""
+    approach = plan_artifact.get("approach", "")
+    modules = plan_artifact.get("modules", [])
+    files_per_module = plan_artifact.get("files_per_module", {})
+
+    module_lines = []
+    for mod in modules:
+        files = files_per_module.get(mod, [])
+        module_lines.append(f"- **{mod}**: {', '.join(files)}")
+    modules_text = "\n".join(module_lines)
+
+    standards = _load_standards("commits", "prs")
+    standards_block = (
+        f"\n\n---\n\n## kiln Agent Standards\n\n{standards}\n\n---\n" if standards else ""
+    )
+
+    return f"""You are writing the README.md for the GitHub repo `{repo}` after a completed implementation milestone: `{milestone}`.
+{standards_block}
+Implementation summary:
+{approach}
+
+Modules and files:
+{modules_text}
+
+Steps:
+1. Clone the repo: `gh repo clone {repo} .`
+2. Read the existing source files to understand what was built.
+3. Write a clear, concise README.md at the repo root. Include:
+   - Project name and one-line description
+   - What it does (2-3 sentences)
+   - How to install / run (based on pyproject.toml if present)
+   - Module overview (one line per module)
+   - How to run tests
+4. Create a branch: `git checkout -b docs/readme`
+5. `git add README.md && git commit -m "docs: add README"`
+6. `git push -u origin docs/readme`
+7. `gh pr create --repo {repo} --title "docs: add README" --body "Auto-generated README for {milestone}"`
+8. Wait for CI: `gh pr checks <PR-number> --watch --repo {repo}`
+9. Squash merge: `gh pr merge <PR-number> --repo {repo} --squash --delete-branch`
+"""
 
 
 # ---------------------------------------------------------------------------
