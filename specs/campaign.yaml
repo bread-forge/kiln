@@ -1,0 +1,204 @@
+# ASDLC Campaign — Autonomous Software Development Lifecycle
+# Full build plan for the bread-forge ecosystem.
+# Each wave's milestones can run in parallel; waves are sequential.
+#
+# Repos:
+#   bread-forge/beads    — shared state types (all others depend on this)
+#   bread-forge/kiln     — DAG execution tier (already at v0.1.0)
+#   bread-forge/repo-audit — analysis tier (new)
+#   bread-forge/pipeline   — control plane + synthesis + verification + policy (new)
+
+milestones:
+
+  # ─── Wave 0: Foundation ───────────────────────────────────────────────────
+  # Prerequisite: extend beads with pipeline/repo-audit types.
+  # All subsequent milestones depend on this.
+
+  - milestone: beads-v0.2.0
+    repo: bread-forge/beads
+    spec_file: specs/beads-v0.2.0.md
+    wave: 0
+
+  # ─── Wave 1: Analysis Tool ────────────────────────────────────────────────
+  # Build repo-audit bottom-up: collector + analyzer first, then comparator + verdict.
+
+  - milestone: repo-audit-v0.1.0
+    repo: bread-forge/repo-audit
+    spec_file: specs/repo-audit-v0.1.0.md
+    wave: 1
+    blocked_by:
+      - bread-forge/beads:beads-v0.2.0
+
+  - milestone: repo-audit-v0.1.1
+    repo: bread-forge/repo-audit
+    spec_file: specs/repo-audit-v0.1.1.md
+    wave: 1
+    blocked_by:
+      - bread-forge/repo-audit:repo-audit-v0.1.0
+
+  - milestone: repo-audit-v0.2.0
+    repo: bread-forge/repo-audit
+    spec_file: specs/repo-audit-v0.2.0.md
+    wave: 1
+    blocked_by:
+      - bread-forge/repo-audit:repo-audit-v0.1.1
+
+  - milestone: repo-audit-v0.2.1
+    repo: bread-forge/repo-audit
+    spec_file: specs/repo-audit-v0.2.1.md
+    wave: 1
+    blocked_by:
+      - bread-forge/repo-audit:repo-audit-v0.2.0
+
+  - milestone: repo-audit-v0.2.2
+    repo: bread-forge/repo-audit
+    spec_file: specs/repo-audit-v0.2.2.md
+    wave: 1
+    blocked_by:
+      - bread-forge/repo-audit:repo-audit-v0.2.0  # LLM enrichment needed for threat model
+
+  # ─── Wave 2: Control Plane Core ───────────────────────────────────────────
+  # Build pipeline observe-only infrastructure (event log, gate, suppressions, budget).
+  # Requires repo-audit to be installable for dispatch.
+
+  - milestone: pipeline-v0.1.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.1.0.md
+    wave: 2
+    blocked_by:
+      - bread-forge/beads:beads-v0.2.0
+      - bread-forge/repo-audit:repo-audit-v0.1.1
+
+  - milestone: pipeline-v0.1.1
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.1.1.md
+    wave: 2
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.1.0
+
+  - milestone: pipeline-v0.1.2
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.1.2.md
+    wave: 2
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.1.1
+
+  - milestone: pipeline-v0.1.3
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.1.3.md
+    wave: 2
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.1.2
+
+  - milestone: pipeline-v0.1.4
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.1.4.md
+    wave: 2
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.1.3
+
+  # ─── Wave 3: Synthesis Agents ─────────────────────────────────────────────
+  # QE → PE → PM in order (each depends on the previous).
+
+  - milestone: pipeline-v0.2.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.2.0.md
+    wave: 3
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.1.4
+      - bread-forge/repo-audit:repo-audit-v0.2.1  # SpecGen output feeds QE
+
+  - milestone: pipeline-v0.3.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.3.0.md
+    wave: 3
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.2.0
+
+  - milestone: pipeline-v0.4.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.4.0.md
+    wave: 3
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.3.0
+
+  # ─── Wave 4: Live Dispatch + Verification ────────────────────────────────
+  # Remove observe-only; add verification tier.
+
+  - milestone: pipeline-v0.5.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.5.0.md
+    wave: 4
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.4.0
+
+  - milestone: pipeline-v0.5.1
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.5.1.md
+    wave: 4
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.5.0
+
+  - milestone: pipeline-v0.5.2
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.5.2.md
+    wave: 4
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.5.1
+
+  - milestone: pipeline-v0.5.3
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v0.5.3.md
+    wave: 4
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.5.2
+
+  # ─── Wave 5: Policy Engine ────────────────────────────────────────────────
+
+  - milestone: pipeline-v1.0.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v1.0.0.md
+    wave: 5
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v0.5.3
+
+  - milestone: pipeline-v1.1.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v1.1.0.md
+    wave: 5
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v1.0.0
+
+  # ─── Wave 6: Self-Improvement ─────────────────────────────────────────────
+  # Requires sufficient telemetry history (30+ cycles) — run after wave 5 has
+  # accumulated data.
+
+  - milestone: pipeline-v2.0.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v2.0.0.md
+    wave: 6
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v1.1.0
+
+  - milestone: pipeline-v2.1.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v2.1.0.md
+    wave: 6
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v2.0.0
+
+  # ─── Wave 7: Full Auto ────────────────────────────────────────────────────
+
+  - milestone: pipeline-v3.0.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v3.0.0.md
+    wave: 7
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v2.1.0
+
+  - milestone: pipeline-v3.1.0
+    repo: bread-forge/pipeline
+    spec_file: specs/pipeline-v3.1.0.md
+    wave: 7
+    blocked_by:
+      - bread-forge/pipeline:pipeline-v3.0.0
