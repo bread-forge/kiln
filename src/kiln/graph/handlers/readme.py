@@ -10,12 +10,14 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kiln.agents.runner import run_agent
 from beads.types import GraphNode
+
+from kiln.agents.runner import run_agent
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:
     from beads.store import BeadStore
+
     from kiln.config import Config
     from kiln.logger import Logger
 

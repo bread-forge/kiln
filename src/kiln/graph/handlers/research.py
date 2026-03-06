@@ -18,13 +18,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from beads.types import GraphNode
+
 from kiln.agents.prompts import RESEARCH_PROMPT
 from kiln.agents.runner import run_agent
-from beads.types import GraphNode
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:
     from beads.store import BeadStore
+
     from kiln.config import Config
     from kiln.logger import Logger
 

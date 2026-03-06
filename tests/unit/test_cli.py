@@ -7,9 +7,9 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from beads import BeadStore, GraphNode, WorkBead
 from typer.testing import CliRunner
 
-from beads import BeadStore, GraphNode, WorkBead
 from kiln.cli import (
     _build_status_table,
     _ensure_milestone,

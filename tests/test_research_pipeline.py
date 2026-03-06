@@ -17,10 +17,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from kiln.agents.runner import RunResult
 from beads import BeadStore
 from beads.types import GraphNode
+
+from kiln.agents.runner import RunResult
 from kiln.config import Config
 from kiln.graph.handlers.research import ResearchHandler
 

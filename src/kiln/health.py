@@ -218,9 +218,7 @@ def run_health_checks(repo: str) -> HealthReport:
 
     # 6. Credential proxy secret
     if os.environ.get("KILN_PROXY_SECRET"):
-        checks.append(
-            CheckResult("proxy-secret", CheckStatus.PASS, "KILN_PROXY_SECRET is set")
-        )
+        checks.append(CheckResult("proxy-secret", CheckStatus.PASS, "KILN_PROXY_SECRET is set"))
     else:
         checks.append(
             CheckResult(

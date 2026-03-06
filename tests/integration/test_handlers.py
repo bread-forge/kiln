@@ -8,9 +8,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from beads import BeadStore, GraphNode, PRBead, WorkBead
 
 from kiln.agents.runner import RunResult
-from beads import BeadStore, GraphNode, PRBead, WorkBead
 from kiln.config import Config
 from kiln.graph.handlers.build import BuildHandler
 from kiln.graph.handlers.merge import MergeHandler
@@ -339,9 +339,7 @@ class TestResearchHandler:
             context={"milestone": "v1.0", "unknowns": ["Which JWT library?"]},
         )
 
-        with patch(
-            "kiln.graph.handlers.research.run_agent", new_callable=AsyncMock
-        ) as mock_run:
+        with patch("kiln.graph.handlers.research.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = fake_run_result(exit_code=0, stdout="# Research\n\nUse PyJWT.")
             handler = ResearchHandler(store=store)
             result = asyncio.run(handler.execute(node, config))
@@ -360,9 +358,7 @@ class TestResearchHandler:
             context={"milestone": "v1.0", "unknowns": ["Something?"]},
         )
 
-        with patch(
-            "kiln.graph.handlers.research.run_agent", new_callable=AsyncMock
-        ) as mock_run:
+        with patch("kiln.graph.handlers.research.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = fake_run_result(exit_code=1, stderr="timeout")
             handler = ResearchHandler(store=store)
             result = asyncio.run(handler.execute(node, config))
@@ -377,9 +373,7 @@ class TestResearchHandler:
             context={"milestone": "v1.0", "unknowns": ["Q?"]},
         )
 
-        with patch(
-            "kiln.graph.handlers.research.run_agent", new_callable=AsyncMock
-        ) as mock_run:
+        with patch("kiln.graph.handlers.research.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = fake_run_result(exit_code=0, stdout="findings")
             handler = ResearchHandler(store=store)
             asyncio.run(handler.execute(node, config))

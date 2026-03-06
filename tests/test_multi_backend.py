@@ -20,8 +20,8 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 import pytest
-
 from beads.types import GraphNode
+
 from kiln.config import Config
 
 # ---------------------------------------------------------------------------

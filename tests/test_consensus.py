@@ -29,8 +29,8 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
-
 from beads.types import GraphNode
+
 from kiln.config import Config
 from kiln.graph.executor import ExecutionGraph, GraphExecutor
 from kiln.graph.node import NodeResult

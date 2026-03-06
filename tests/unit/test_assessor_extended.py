@@ -6,13 +6,14 @@ import asyncio
 import json
 from unittest.mock import AsyncMock, patch
 
+from beads.types import PlanArtifact
+
 from kiln.agents.assessor import (
     Assessor,
     ComplexityTier,
     assess_and_allocate,
     assess_from_plan_artifact,
 )
-from beads.types import PlanArtifact
 
 # ---------------------------------------------------------------------------
 # Helpers
