@@ -1104,7 +1104,7 @@ def _build_status_table(
         if total_cost > 0:
             from rich.text import Text
 
-            tables.append(Text(f"  Est. cost: ${total_cost:.4f}", style="dim"))
+            tables.append(Text(f"  Est. cost: ${total_cost:.2f}", style="dim"))
 
     return Group(*tables)
 
@@ -1397,14 +1397,14 @@ def cost(
             continue
         total = sum(float(r.get("cost_usd") or 0) for r in records)
         grand_total += total
-        table.add_row(run_id, str(len(records)), f"${total:.4f}")
+        table.add_row(run_id, str(len(records)), f"${total:.2f}")
 
     if not table.rows:
         console.print(f"No cost records found for period '{period}'.")
         return
 
     table.add_section()
-    table.add_row("[bold]TOTAL[/bold]", "", f"[bold]${grand_total:.4f}[/bold]")
+    table.add_row("[bold]TOTAL[/bold]", "", f"[bold]${grand_total:.2f}[/bold]")
     console.print(table)
 
 
@@ -1771,14 +1771,20 @@ def _collect_dashboard_rows() -> list[tuple[str, str, list]]:
     return rows
 
 
-def _milestone_summary(nodes: list) -> tuple[int, int, str, str]:
-    """Return (done, total, bar, status_markup) for a milestone's nodes."""
+def _milestone_summary(nodes: list) -> tuple[int, int, str, str, str, float]:
+    """Return (done, total, bar, status, color, cost_usd) for a milestone's nodes."""
     states = [n.get("state", "") for n in nodes]
     total = len(states)
-    done = states.count("done")
+    done = states.count("done") + states.count("already-done") + states.count("wont-do")
     pending = states.count("pending") + states.count("running")
     abandoned = states.count("abandoned")
     failed = states.count("failed")
+
+    cost_usd: float = 0.0
+    for n in nodes:
+        out = n.get("output") or {}
+        if isinstance(out, dict):
+            cost_usd += out.get("cost_usd") or 0.0
 
     pct = done / total if total else 0.0
     bar_filled = int(pct * 8)
@@ -1804,7 +1810,7 @@ def _milestone_summary(nodes: list) -> tuple[int, int, str, str]:
         status = "idle"
         bar_color = "dim"
 
-    return done, total, f"[{bar_color}]{bar}[/{bar_color}]", status, bar_color
+    return done, total, f"[{bar_color}]{bar}[/{bar_color}]", status, bar_color, cost_usd
 
 
 def _build_dashboard() -> Group:
@@ -1821,10 +1827,14 @@ def _build_dashboard() -> Group:
     table.add_column("Nodes", justify="right", no_wrap=True)
     table.add_column("", no_wrap=True)
     table.add_column("Status", no_wrap=True)
+    table.add_column("Cost", justify="right", no_wrap=True)
 
+    repo_costs: dict[str, float] = {}
     for repo, ms, nodes in rows:
-        done, total, bar_markup, status, _color = _milestone_summary(nodes)
-        table.add_row(repo, ms, f"{done}/{total}", bar_markup, status)
+        done, total, bar_markup, status, _color, cost = _milestone_summary(nodes)
+        repo_costs[repo] = repo_costs.get(repo, 0.0) + cost
+        cost_str = f"${cost:.2f}" if cost else ""
+        table.add_row(repo, ms, f"{done}/{total}", bar_markup, status, cost_str)
 
     return Group(table)
 
@@ -1858,7 +1868,7 @@ def _launch_dashboard_tui() -> None:
         cost = node.get("output", {}) or {}
         cost_str = ""
         if isinstance(cost, dict) and cost.get("cost_usd"):
-            cost_str = f"  [dim]${cost['cost_usd']:.4f}[/dim]"
+            cost_str = f"  [dim]${cost['cost_usd']:.2f}[/dim]"
         return f"[{color}]{state:10}[/{color}]  [{('bold' if ntype == 'build' else 'dim')}]{nid}[/]  [dim]{ntype}[/dim]{cost_str}"
 
     def _bead_path(repo: str, node_id: str) -> Path:
@@ -2003,21 +2013,34 @@ def _launch_dashboard_tui() -> None:
 
             last_repo = None
             repo_node: TreeNode | None = None
+            repo_cost: dict[str, float] = {}
+            repo_nodes_map: dict[str, TreeNode] = {}
+
+            # First pass: compute per-repo totals
+            for repo, _ms, nodes in rows:
+                for n in nodes:
+                    out = n.get("output") or {}
+                    if isinstance(out, dict):
+                        repo_cost[repo] = repo_cost.get(repo, 0.0) + (out.get("cost_usd") or 0.0)
 
             for repo, ms, nodes in rows:
                 if repo != last_repo:
+                    total_cost = repo_cost.get(repo, 0.0)
+                    cost_suffix = f"  [dim]${total_cost:.2f}[/dim]" if total_cost else ""
                     repo_node = tree.root.add(
-                        f"[cyan bold]{repo}[/cyan bold]",
+                        f"[cyan bold]{repo}[/cyan bold]{cost_suffix}",
                         expand=repo in restore_expanded,
                         data={"key": repo},
                     )
+                    repo_nodes_map[repo] = repo_node
                     last_repo = repo
 
-                done, total, bar_markup, status, color = _milestone_summary(nodes)
+                done, total, bar_markup, status, color, cost = _milestone_summary(nodes)
                 ms_key = f"{repo}/{ms}"
+                cost_str = f"  [dim]${cost:.2f}[/dim]" if cost else ""
                 ms_label = (
                     f"{bar_markup}  [bold]{ms}[/bold]  "
-                    f"[dim]{done}/{total}[/dim]  [{color}]{status}[/{color}]"
+                    f"[dim]{done}/{total}[/dim]  [{color}]{status}[/{color}]{cost_str}"
                 )
                 ms_node = repo_node.add(
                     ms_label,
@@ -2507,7 +2530,7 @@ def graph_nodes(
         color = _NODE_STATE_COLORS.get(node.state, "white")
         node_model = (node.output or {}).get("model") or node.assigned_model or ""
         cost = (node.output or {}).get("cost_usd")
-        cost_str = f"${cost:.4f}" if cost is not None else ""
+        cost_str = f"${cost:.2f}" if cost is not None else ""
         table.add_row(
             node.id,
             node.type,

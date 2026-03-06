@@ -401,7 +401,7 @@ class TestGraphNodes:
         store.write_node(node)
         result = runner.invoke(app, ["graph", "nodes", "--repo", "owner/repo"])
         assert result.exit_code == 0
-        assert "0.0123" in result.output
+        assert "$0.01" in result.output
 
 
 # ---------------------------------------------------------------------------

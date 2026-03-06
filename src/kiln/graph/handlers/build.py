@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from beads.types import GraphNode, MergeQueueItem, PRBead
+from beads.types import GraphNode, PRBead
 
 from kiln.agents.assessor import assess_and_allocate, assess_from_plan_artifact
 from kiln.agents.prompts import build_agent_prompt
@@ -365,9 +365,6 @@ class BuildHandler:
                 branch=branch,
             )
             self._store.write_pr_bead(pr_bead)
-            self._store.enqueue_merge(
-                MergeQueueItem(pr_number=pr_number, issue_number=issue_number, branch=branch)
-            )
 
         out: dict = {"pr_number": pr_number, "branch": branch, "model": model}
         if result.cost_usd is not None:

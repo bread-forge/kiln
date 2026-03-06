@@ -30,7 +30,7 @@ from kiln.gh import _gh
 from kiln.graph.node import NodeResult
 
 CI_POLL_INTERVAL_SECONDS = 60
-MAX_CONFLICT_ATTEMPTS = 1
+MAX_CONFLICT_ATTEMPTS = 3
 MAX_REVIEW_ATTEMPTS = 2
 MAX_REPAIR_ATTEMPTS = 2
 
@@ -258,16 +258,27 @@ Fix only what CI is complaining about. Do not refactor or expand scope."""
 The branch needs to be rebased onto main. Some files may have conflicts.
 
 Steps:
-1. `gh repo clone {repo} . && git fetch origin && git checkout {branch}`
-2. `git fetch origin main && git rebase origin/main`
+1. Clone the repo and check out the branch:
+   ```
+   gh repo clone {repo} repo && cd repo && git checkout {branch}
+   ```
+2. Rebase onto the default branch:
+   ```
+   git fetch origin && git rebase origin/mainline
+   ```
+   (if `mainline` doesn't exist, try `origin/main`)
 3. For each conflicted file:
    - Read both sides of the conflict carefully
    - Keep ALL new functionality from BOTH sides — do not drop features
    - Resolve using the current file structure (refer to other non-conflicted files for context)
    - `git add <resolved-file>`
 4. `git rebase --continue` (repeat step 3 for each commit if multi-commit rebase)
-5. `git push --force-with-lease origin {branch}`
-6. STOP — do not merge, do not close the PR
+5. Force-push the resolved branch — this is REQUIRED:
+   ```
+   git push --force-with-lease origin {branch}
+   ```
+6. Verify the push succeeded by running: `git status`
+7. STOP — do not merge, do not close the PR
 
 You must preserve all intentional changes from the PR. Do not discard any features."""
 

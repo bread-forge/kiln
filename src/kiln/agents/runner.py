@@ -149,7 +149,6 @@ async def _run_agent_once(
         "claude",
         "--output-format",
         "stream-json",
-        "--verbose",
         "--model",
         model,
         "--print",
