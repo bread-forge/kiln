@@ -16,6 +16,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check out beads (path dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: bread-forge/beads
+          path: ../beads
+
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
