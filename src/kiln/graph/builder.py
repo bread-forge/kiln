@@ -23,12 +23,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from kiln.beads.types import CampaignBead, GraphNode
+from beads.types import CampaignBead, GraphNode
 from kiln.graph.executor import ExecutionGraph
 from kiln.graph.node import make_node
 
 if TYPE_CHECKING:
-    from kiln.beads.store import BeadStore
+    from beads.store import BeadStore
 
 
 def build_greenfield_graph(

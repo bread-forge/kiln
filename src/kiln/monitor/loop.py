@@ -10,7 +10,7 @@ from kiln.monitor.detect import _detect_anomalies
 from kiln.monitor.repair import _repair_agent, _repair_auto
 
 if TYPE_CHECKING:
-    from kiln.beads.store import BeadStore
+    from beads.store import BeadStore
     from kiln.config import Config
     from kiln.logger import Logger
 

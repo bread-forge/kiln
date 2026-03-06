@@ -11,11 +11,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kiln.agents.runner import run_agent
-from kiln.beads.types import GraphNode
+from beads.types import GraphNode
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:
-    from kiln.beads.store import BeadStore
+    from beads.store import BeadStore
     from kiln.config import Config
     from kiln.logger import Logger
 

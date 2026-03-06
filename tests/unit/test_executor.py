@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from kiln.beads import BeadStore, GraphNode
+from beads import BeadStore, GraphNode
 from kiln.config import Config
 from kiln.graph.executor import (
     ExecutionGraph,

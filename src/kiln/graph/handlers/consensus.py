@@ -23,11 +23,11 @@ import asyncio
 import json
 from typing import TYPE_CHECKING, Any
 
-from kiln.beads.types import GraphNode
+from beads.types import GraphNode
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:
-    from kiln.beads.store import BeadStore
+    from beads.store import BeadStore
     from kiln.config import Config
     from kiln.logger import Logger
 
@@ -98,7 +98,7 @@ class WaitHandler:
     def _is_shipped(self, repo: str, milestone: str, config: Config) -> bool:
         if not self._store:
             return False
-        from kiln.beads.store import BeadStore
+        from beads.store import BeadStore
 
         # Build a store scoped to the blocking repo
         blocking_store = BeadStore(config.beads_dir, repo)

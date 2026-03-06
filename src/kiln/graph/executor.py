@@ -14,7 +14,7 @@ import asyncio
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from kiln.beads.types import GraphNode, NodeType
+from beads.types import GraphNode, NodeType
 from kiln.graph.node import BackendRouter, NodeHandler, NodeResult
 
 # Gate node types: abandonment means "gate not held — proceed anyway", not "work failed".
@@ -22,7 +22,7 @@ from kiln.graph.node import BackendRouter, NodeHandler, NodeResult
 _GATE_TYPES: frozenset[str] = frozenset({"wait", "consensus"})
 
 if TYPE_CHECKING:
-    from kiln.beads.store import BeadStore
+    from beads.store import BeadStore
     from kiln.config import Config
     from kiln.logger import Logger
 
@@ -348,7 +348,7 @@ class GraphExecutor:
             module: str = node.context.get("module", node.id)
             files: list[str] = node.context.get("files", [])
             if issue_number and self._store:
-                from kiln.beads.types import WorkBead
+                from beads.types import WorkBead
 
                 existing = self._store.read_work_bead(issue_number)
                 if not existing:

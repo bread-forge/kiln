@@ -38,7 +38,7 @@ from __future__ import annotations
 import subprocess
 from typing import TYPE_CHECKING, Any
 
-from kiln.beads.types import GraphNode
+from beads.types import GraphNode
 from kiln.gh import _gh
 from kiln.graph.node import NodeResult
 from kiln.spec import parse_validation_assertions

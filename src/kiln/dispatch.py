@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from kiln.assessor import assess_and_allocate
-from kiln.beads import (
+from beads import (
     BeadStore,
     MergeQueueItem,
     PRBead,

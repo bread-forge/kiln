@@ -39,7 +39,7 @@ import typer  # noqa: E402
 from rich.console import Console, Group  # noqa: E402
 from rich.table import Table  # noqa: E402
 
-from kiln.beads import BeadStore, GraphNode  # noqa: E402
+from beads import BeadStore, GraphNode  # noqa: E402
 from kiln.config import Config, Registry, RepoEntry  # noqa: E402
 from kiln.health import run_health_checks  # noqa: E402
 from kiln.logger import Logger  # noqa: E402
@@ -510,7 +510,7 @@ def _seed_work_beads(
     repo: str = "",
 ) -> list[int]:
     """Create WorkBeads for issues that don't already have one. Returns new issue numbers."""
-    from kiln.beads import WorkBead
+    from beads import WorkBead
 
     new_numbers = []
     for issue in issues:
@@ -910,7 +910,7 @@ def plan(
 
     _scaffold_repo(repo)
 
-    from kiln.beads import CampaignBead, MilestonePlan
+    from beads import CampaignBead, MilestonePlan
 
     campaign = store.read_campaign_bead() or CampaignBead(repo=repo)
     total_filed = 0
@@ -2143,7 +2143,7 @@ def drain(
     import re as _re
     import time as _time
 
-    from kiln.beads.types import MergeQueueItem, PRBead
+    from beads.types import MergeQueueItem, PRBead
 
     repo = _require_repo(repo)
     config = Config.from_env(repo)

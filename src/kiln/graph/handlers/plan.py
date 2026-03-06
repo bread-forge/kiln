@@ -14,11 +14,11 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kiln.beads.types import GraphNode, PlanArtifact
+from beads.types import GraphNode, PlanArtifact
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:
-    from kiln.beads.store import BeadStore
+    from beads.store import BeadStore
     from kiln.config import Config
     from kiln.logger import Logger
 

@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from kiln.beads.types import GraphNode
+from beads.types import GraphNode
 from kiln.config import Config
 
 # ---------------------------------------------------------------------------

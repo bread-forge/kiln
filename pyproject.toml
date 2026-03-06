@@ -17,6 +17,7 @@ dependencies = [
     "httpx>=0.27",
     "anthropic>=0.84.0",
     "textual>=8.0.2",
+    "beads",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +46,9 @@ src = ["src"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["E501"]
+
+[tool.uv.sources]
+beads = { path = "../beads", editable = true }
 
 [dependency-groups]
 dev = [

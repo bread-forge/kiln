@@ -10,7 +10,7 @@ from kiln.gh import _gh
 from kiln.monitor.anomaly import AnomalyBead, AnomalyKind
 
 if TYPE_CHECKING:
-    from kiln.beads.store import BeadStore
+    from beads.store import BeadStore
     from kiln.config import Config
     from kiln.logger import Logger
 

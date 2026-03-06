@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
-from kiln.beads.types import (
+from beads.types import (
     GraphNode,
     NodeState,
     NodeType,

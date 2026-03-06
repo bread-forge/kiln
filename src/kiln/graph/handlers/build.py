@@ -16,12 +16,12 @@ from typing import TYPE_CHECKING, Any
 from kiln.agents.assessor import assess_and_allocate, assess_from_plan_artifact
 from kiln.agents.prompts import build_agent_prompt
 from kiln.agents.runner import run_agent
-from kiln.beads.types import GraphNode, MergeQueueItem, PRBead
+from beads.types import GraphNode, MergeQueueItem, PRBead
 from kiln.gh import _gh
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:
-    from kiln.beads.store import BeadStore
+    from beads.store import BeadStore
     from kiln.config import Config
     from kiln.logger import Logger
 
@@ -349,7 +349,7 @@ class BuildHandler:
         return NodeResult(success=True, output=out, cost_usd=result.cost_usd)
 
     async def _assess(self, node: GraphNode, config: Config):
-        from kiln.beads.types import PlanArtifact
+        from beads.types import PlanArtifact
 
         override = config.model if config.model else None
 

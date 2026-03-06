@@ -19,8 +19,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from kiln.agents.runner import RunResult
-from kiln.beads import BeadStore
-from kiln.beads.types import GraphNode
+from beads import BeadStore
+from beads.types import GraphNode
 from kiln.config import Config
 from kiln.graph.handlers.research import ResearchHandler
 

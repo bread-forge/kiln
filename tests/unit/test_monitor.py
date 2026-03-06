@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kiln.beads import BeadStore, WorkBead
+from beads import BeadStore, WorkBead
 from kiln.monitor import AnomalyKind, AnomalyStore, _detect_anomalies
 
 

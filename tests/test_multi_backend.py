@@ -21,7 +21,7 @@ from typing import Protocol, runtime_checkable
 
 import pytest
 
-from kiln.beads.types import GraphNode
+from beads.types import GraphNode
 from kiln.config import Config
 
 # ---------------------------------------------------------------------------

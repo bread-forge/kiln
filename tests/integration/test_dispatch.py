@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from kiln.beads import BeadStore, WorkBead
+from beads import BeadStore, WorkBead
 from kiln.config import Config
 from kiln.dispatch import RollingDispatcher
 from kiln.logger import Logger

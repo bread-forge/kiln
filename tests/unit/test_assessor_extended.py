@@ -12,7 +12,7 @@ from kiln.agents.assessor import (
     assess_and_allocate,
     assess_from_plan_artifact,
 )
-from kiln.beads.types import PlanArtifact
+from beads.types import PlanArtifact
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from kiln.agents.runner import RunResult
-from kiln.beads import BeadStore, GraphNode, PRBead, WorkBead
+from beads import BeadStore, GraphNode, PRBead, WorkBead
 from kiln.config import Config
 from kiln.graph.handlers.build import BuildHandler
 from kiln.graph.handlers.merge import MergeHandler
@@ -203,7 +203,7 @@ class TestBuildHandler:
         assert "scope violation" in result.error
 
     def test_uses_plan_artifact_for_assessment(self, store: BeadStore) -> None:
-        from kiln.beads.types import PlanArtifact
+        from beads.types import PlanArtifact
 
         # Use a config with no model override so risk_flags take effect
         config_no_override = Config(repo="owner/repo", model="")

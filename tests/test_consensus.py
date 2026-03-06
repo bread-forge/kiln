@@ -30,7 +30,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from kiln.beads.types import GraphNode
+from beads.types import GraphNode
 from kiln.config import Config
 from kiln.graph.executor import ExecutionGraph, GraphExecutor
 from kiln.graph.node import NodeResult

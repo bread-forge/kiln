@@ -204,7 +204,7 @@ def assess_from_plan_artifact(
 
 
 # Keep type hint importable without circular issue
-from kiln.beads.types import PlanArtifact  # noqa: E402 — after function definition
+from beads.types import PlanArtifact  # noqa: E402 — after function definition
 
 # ---------------------------------------------------------------------------
 # Allocator

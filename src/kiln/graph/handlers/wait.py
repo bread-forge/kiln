@@ -29,7 +29,7 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kiln.beads.types import GraphNode
+from beads.types import GraphNode
 from kiln.graph.node import NodeResult
 
 if TYPE_CHECKING:

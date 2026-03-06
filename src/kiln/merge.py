@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from kiln.beads import BeadStore, PRState
+from beads import BeadStore, PRState
 from kiln.config import Config
 from kiln.gh import _gh, _git
 from kiln.logger import Logger

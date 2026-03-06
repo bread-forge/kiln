@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kiln.beads import BeadStore
+from beads import BeadStore
 from kiln.config import Config
 from kiln.logger import Logger
 from kiln.monitor.anomaly import AnomalyBead, AnomalyKind, AnomalyStore
@@ -46,7 +46,7 @@ class TestRunMonitor:
         import json
         from datetime import UTC, datetime, timedelta
 
-        from kiln.beads.types import WorkBead
+        from beads.types import WorkBead
         from kiln.monitor.loop import run_monitor
 
         # Inject a stuck issue
@@ -175,7 +175,7 @@ class TestRunMonitor:
         import json
         from datetime import UTC, datetime, timedelta
 
-        from kiln.beads.types import WorkBead
+        from beads.types import WorkBead
         from kiln.monitor.loop import run_monitor
 
         astore = AnomalyStore(config.beads_dir, config.repo)
