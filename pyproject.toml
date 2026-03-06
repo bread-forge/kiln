@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "breadforge"
-version = "0.2.0"
-description = "Platform build orchestrator — spec-driven, bead-tracked, multi-repo"
+name = "kiln"
+version = "0.1.0"
+description = "Spec-driven agent executor — part of the breadforge platform"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -28,10 +28,10 @@ dev = [
 ]
 
 [project.scripts]
-breadforge = "breadforge.cli:app"
+kiln = "kiln.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/breadforge"]
+packages = ["src/kiln"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

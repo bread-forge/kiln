@@ -18,7 +18,7 @@ def _proc(returncode: int = 0, stdout: str = "", stderr: str = "") -> MagicMock:
 
 class TestAcceptBotInvitation:
     def test_accepts_matching_invitation(self) -> None:
-        from breadforge.cli import _accept_bot_invitation
+        from kiln.cli import _accept_bot_invitation
 
         invite_json = json.dumps(
             [
@@ -35,7 +35,7 @@ class TestAcceptBotInvitation:
         assert mock_run.call_count == 2  # list + one accept (not two)
 
     def test_accepts_multiple_invitations_for_same_repo(self) -> None:
-        from breadforge.cli import _accept_bot_invitation
+        from kiln.cli import _accept_bot_invitation
 
         invite_json = json.dumps(
             [
@@ -53,14 +53,14 @@ class TestAcceptBotInvitation:
         assert mock_run.call_count == 3
 
     def test_no_matching_invitations_no_accept_call(self) -> None:
-        from breadforge.cli import _accept_bot_invitation
+        from kiln.cli import _accept_bot_invitation
 
         with patch("subprocess.run", return_value=_proc(0, "[]")) as mock_run:
             _accept_bot_invitation("owner/repo", "tok")
         assert mock_run.call_count == 1  # list only
 
     def test_non_dict_items_in_list_are_skipped(self) -> None:
-        from breadforge.cli import _accept_bot_invitation
+        from kiln.cli import _accept_bot_invitation
 
         bad_json = json.dumps(
             ["a string", None, {"id": 5, "repository": {"full_name": "owner/repo"}}]
@@ -73,13 +73,13 @@ class TestAcceptBotInvitation:
             _accept_bot_invitation("owner/repo", "tok")  # must not raise
 
     def test_bad_json_from_list_endpoint(self) -> None:
-        from breadforge.cli import _accept_bot_invitation
+        from kiln.cli import _accept_bot_invitation
 
         with patch("subprocess.run", return_value=_proc(0, "not-json")):
             _accept_bot_invitation("owner/repo", "tok")  # must not raise
 
     def test_non_204_acceptance_prints_warning(self, capsys) -> None:
-        from breadforge.cli import _accept_bot_invitation
+        from kiln.cli import _accept_bot_invitation
 
         invite_json = json.dumps([{"id": 1, "repository": {"full_name": "owner/repo"}}])
         responses = [
@@ -99,24 +99,24 @@ class TestAcceptBotInvitation:
 
 class TestAddBotCollaborator:
     def test_add_succeeds_then_calls_accept(self) -> None:
-        from breadforge.cli import _add_bot_collaborator
+        from kiln.cli import _add_bot_collaborator
 
         responses = [
             _proc(0),  # PUT collaborator
             _proc(0, "[]"),  # list invitations (none pending)
         ]
         with (
-            patch.dict(os.environ, {"BREADFORGE_GH_TOKEN": "tok"}),
+            patch.dict(os.environ, {"KILN_GH_TOKEN": "tok"}),
             patch("subprocess.run", side_effect=responses) as mock_run,
         ):
             _add_bot_collaborator("owner/repo")
         assert mock_run.call_count == 2
 
     def test_add_fails_does_not_call_accept(self) -> None:
-        from breadforge.cli import _add_bot_collaborator
+        from kiln.cli import _add_bot_collaborator
 
         with (
-            patch.dict(os.environ, {"BREADFORGE_GH_TOKEN": "tok"}),
+            patch.dict(os.environ, {"KILN_GH_TOKEN": "tok"}),
             patch("subprocess.run", return_value=_proc(1, stderr="forbidden")) as mock_run,
         ):
             _add_bot_collaborator("owner/repo")
@@ -124,7 +124,7 @@ class TestAddBotCollaborator:
 
     def test_put_strips_gh_token_from_env(self) -> None:
         """PUT must strip GH_TOKEN so it doesn't auth as yeast-bot."""
-        from breadforge.cli import _add_bot_collaborator
+        from kiln.cli import _add_bot_collaborator
 
         captured_env: dict = {}
         call_index = 0
@@ -138,7 +138,7 @@ class TestAddBotCollaborator:
             return _proc(0, "[]")
 
         with (
-            patch.dict(os.environ, {"BREADFORGE_GH_TOKEN": "bot-tok", "GH_TOKEN": "owner-tok"}),
+            patch.dict(os.environ, {"KILN_GH_TOKEN": "bot-tok", "GH_TOKEN": "owner-tok"}),
             patch("subprocess.run", side_effect=fake_run),
         ):
             _add_bot_collaborator("owner/repo")
@@ -146,7 +146,7 @@ class TestAddBotCollaborator:
         assert "GH_TOKEN" not in captured_env
 
     def test_add_and_accept_full_flow(self) -> None:
-        from breadforge.cli import _add_bot_collaborator
+        from kiln.cli import _add_bot_collaborator
 
         invite_json = json.dumps([{"id": 10, "repository": {"full_name": "owner/repo"}}])
         responses = [
@@ -155,7 +155,7 @@ class TestAddBotCollaborator:
             _proc(0, "204"),  # accept
         ]
         with (
-            patch.dict(os.environ, {"BREADFORGE_GH_TOKEN": "tok"}),
+            patch.dict(os.environ, {"KILN_GH_TOKEN": "tok"}),
             patch("subprocess.run", side_effect=responses) as mock_run,
         ):
             _add_bot_collaborator("owner/repo")

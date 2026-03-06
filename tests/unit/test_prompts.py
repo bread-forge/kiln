@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from breadforge.agents.prompts import PLAN_PROMPT, RESEARCH_PROMPT, build_agent_prompt
+from kiln.agents.prompts import PLAN_PROMPT, RESEARCH_PROMPT, build_agent_prompt
 
 
 class TestBuildAgentPrompt:

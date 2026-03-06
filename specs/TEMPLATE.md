@@ -60,7 +60,7 @@ Explicit module breakdown. Omit section to let the plan agent propose its own.
 
 ### Minimal valid spec (just a title + description)
 
-The absolute minimum breadforge accepts:
+The absolute minimum kiln accepts:
 
 ```markdown
 # My Project — Feature Name

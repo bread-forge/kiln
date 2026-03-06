@@ -40,4 +40,4 @@ PR covered it. Do NOT create a PR with no meaningful changes.
 - If you need to touch a file not in your scope, stop. File a new issue for that module.
 - Never modify `pyproject.toml`, `CLAUDE.md`, or `README.md` unless explicitly listed
   in your allowed files.
-- The `.breadforge-scope` file is managed by breadforge. Never edit it.
+- The `.kiln-scope` file is managed by kiln. Never edit it.

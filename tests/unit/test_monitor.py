@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from breadforge.beads import BeadStore, WorkBead
-from breadforge.monitor import AnomalyKind, AnomalyStore, _detect_anomalies
+from kiln.beads import BeadStore, WorkBead
+from kiln.monitor import AnomalyKind, AnomalyStore, _detect_anomalies
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def astore(tmp_path: Path) -> AnomalyStore:
 
 class TestAnomalyStore:
     def test_write_and_read(self, astore: AnomalyStore) -> None:
-        from breadforge.monitor import AnomalyBead
+        from kiln.monitor import AnomalyBead
 
         bead = AnomalyBead(
             anomaly_id="test-001",
@@ -36,7 +36,7 @@ class TestAnomalyStore:
         assert result.kind == AnomalyKind.STUCK_ISSUE
 
     def test_list_open_excludes_resolved(self, astore: AnomalyStore) -> None:
-        from breadforge.monitor import AnomalyBead
+        from kiln.monitor import AnomalyBead
 
         open_bead = AnomalyBead(
             anomaly_id="open-001",
@@ -69,7 +69,7 @@ class TestDetectAnomalies:
         store._work_dir.mkdir(parents=True, exist_ok=True)
         (store._work_dir / "10.json").write_text(json.dumps(data))
 
-        with patch("breadforge.monitor.detect._gh") as mock_gh:
+        with patch("kiln.monitor.detect._gh") as mock_gh:
             mock_gh.return_value = MagicMock(returncode=0, stdout="[]")
             anomalies = _detect_anomalies(store, "owner/repo", stuck_minutes=60)
 
@@ -82,7 +82,7 @@ class TestDetectAnomalies:
         bead.state = "claimed"  # type: ignore
         store.write_work_bead(bead)
 
-        with patch("breadforge.monitor.detect._gh") as mock_gh:
+        with patch("kiln.monitor.detect._gh") as mock_gh:
             mock_gh.return_value = MagicMock(returncode=0, stdout="[]")
             anomalies = _detect_anomalies(store, "owner/repo", stuck_minutes=120)
 
@@ -91,7 +91,7 @@ class TestDetectAnomalies:
 
     def test_detects_stale_label(self, store: BeadStore) -> None:
         # No claimed beads, but GitHub returns an in-progress issue
-        with patch("breadforge.monitor.detect._gh") as mock_gh:
+        with patch("kiln.monitor.detect._gh") as mock_gh:
             import json
 
             def gh_side_effect(*args):

@@ -5,11 +5,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from breadforge.beads import BeadStore, WorkBead
-from breadforge.config import Config
-from breadforge.dispatch import RollingDispatcher
-from breadforge.logger import Logger
-from breadforge.runner import RunResult
+from kiln.beads import BeadStore, WorkBead
+from kiln.config import Config
+from kiln.dispatch import RollingDispatcher
+from kiln.logger import Logger
+from kiln.runner import RunResult
 
 
 def _make_config(tmp_path: Path, concurrency: int = 2) -> Config:
@@ -52,19 +52,19 @@ class TestRollingDispatcher:
         _seed_issues(store, [1, 2])
 
         with (
-            patch("breadforge.dispatch._get_issue") as mock_issue,
-            patch("breadforge.dispatch._get_pr_number") as mock_pr,
-            patch("breadforge.dispatch._claim_issue"),
-            patch("breadforge.dispatch._unclaim_issue"),
-            patch("breadforge.dispatch.run_agent", new_callable=AsyncMock) as mock_run,
-            patch("breadforge.dispatch.assess_and_allocate", new_callable=AsyncMock) as mock_assess,
+            patch("kiln.dispatch._get_issue") as mock_issue,
+            patch("kiln.dispatch._get_pr_number") as mock_pr,
+            patch("kiln.dispatch._claim_issue"),
+            patch("kiln.dispatch._unclaim_issue"),
+            patch("kiln.dispatch.run_agent", new_callable=AsyncMock) as mock_run,
+            patch("kiln.dispatch.assess_and_allocate", new_callable=AsyncMock) as mock_assess,
         ):
             mock_issue.return_value = {"title": "Test Issue", "body": "Do the thing", "labels": []}
             # Return distinct PR numbers so beads don't overwrite each other in the store
             _pr_counter = iter([101, 102])
             mock_pr.side_effect = lambda *a, **kw: next(_pr_counter)
             mock_run.return_value = _make_run_result(exit_code=0)
-            from breadforge.assessor import AllocationResult, ComplexityEstimate, ComplexityTier
+            from kiln.assessor import AllocationResult, ComplexityEstimate, ComplexityTier
 
             mock_assess.return_value = (
                 AllocationResult(model="claude-sonnet-4-6", tier=ComplexityTier.MEDIUM),
@@ -89,19 +89,19 @@ class TestRollingDispatcher:
         _seed_issues(store, [5])
 
         with (
-            patch("breadforge.dispatch._get_issue") as mock_issue,
-            patch("breadforge.dispatch._get_pr_number") as mock_pr,
-            patch("breadforge.dispatch._claim_issue"),
-            patch("breadforge.dispatch._unclaim_issue"),
-            patch("breadforge.dispatch._post_comment"),
-            patch("breadforge.dispatch.assess_and_allocate") as mock_assess,
-            patch("breadforge.dispatch.run_agent") as mock_run,
+            patch("kiln.dispatch._get_issue") as mock_issue,
+            patch("kiln.dispatch._get_pr_number") as mock_pr,
+            patch("kiln.dispatch._claim_issue"),
+            patch("kiln.dispatch._unclaim_issue"),
+            patch("kiln.dispatch._post_comment"),
+            patch("kiln.dispatch.assess_and_allocate") as mock_assess,
+            patch("kiln.dispatch.run_agent") as mock_run,
         ):
             mock_issue.return_value = {"title": "Failing Issue", "body": "", "labels": []}
             mock_pr.return_value = None  # No PR created
             mock_run = AsyncMock(return_value=_make_run_result(exit_code=1))
 
-            from breadforge.assessor import AllocationResult, ComplexityEstimate, ComplexityTier
+            from kiln.assessor import AllocationResult, ComplexityEstimate, ComplexityTier
 
             mock_assess.return_value = (
                 AllocationResult(model="claude-sonnet-4-6", tier=ComplexityTier.MEDIUM),
@@ -110,7 +110,7 @@ class TestRollingDispatcher:
                 ),
             )
 
-            with patch("breadforge.dispatch.run_agent", new=mock_run):
+            with patch("kiln.dispatch.run_agent", new=mock_run):
                 dispatcher = RollingDispatcher(config, store, logger)
                 # Only 1 run — should re-queue since retry_count=1 < max_retries=2
                 await dispatcher.run([5])

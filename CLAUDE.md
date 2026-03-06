@@ -1,11 +1,11 @@
-# breadforge — Agent Context
+# kiln — Agent Context
 
-`breadforge` is a Python CLI platform build orchestrator. Source lives in `src/breadforge/`.
+`kiln` is a Python CLI spec-driven agent executor. Source lives in `src/kiln/`.
 Tests live in `tests/`. Default branch: `mainline`.
 
 ## Architecture
 
-breadforge is spec-driven, bead-tracked, and multi-repo:
+kiln is spec-driven, bead-tracked, and multi-repo:
 
 1. **Spec files** describe what to build (one file per milestone)
 2. **Beads** track state on disk — canonical source of truth
@@ -20,19 +20,19 @@ Docs are generated retroactively from built code.
 
 | Label | Allowed filesystem scope |
 |-------|--------------------------|
-| `mod:beads` | `src/breadforge/beads.py` |
-| `mod:config` | `src/breadforge/config.py` |
-| `mod:spec` | `src/breadforge/spec.py` |
-| `mod:runner` | `src/breadforge/runner.py` |
-| `mod:dispatch` | `src/breadforge/dispatch.py` |
-| `mod:merge` | `src/breadforge/merge.py` |
-| `mod:assessor` | `src/breadforge/assessor.py` |
-| `mod:monitor` | `src/breadforge/monitor.py` |
-| `mod:forge` | `src/breadforge/forge.py` |
-| `mod:cli` | `src/breadforge/cli.py` |
-| `mod:health` | `src/breadforge/health.py` |
-| `mod:logger` | `src/breadforge/logger.py` |
-| `mod:graph` | `src/breadforge/graph/` |
+| `mod:beads` | `src/kiln/beads.py` |
+| `mod:config` | `src/kiln/config.py` |
+| `mod:spec` | `src/kiln/spec.py` |
+| `mod:runner` | `src/kiln/runner.py` |
+| `mod:dispatch` | `src/kiln/dispatch.py` |
+| `mod:merge` | `src/kiln/merge.py` |
+| `mod:assessor` | `src/kiln/assessor.py` |
+| `mod:monitor` | `src/kiln/monitor.py` |
+| `mod:forge` | `src/kiln/forge.py` |
+| `mod:cli` | `src/kiln/cli.py` |
+| `mod:health` | `src/kiln/health.py` |
+| `mod:logger` | `src/kiln/logger.py` |
+| `mod:graph` | `src/kiln/graph/` |
 | `infra` | `pyproject.toml`, `.github/`, `CLAUDE.md`, `README.md`, `Makefile` |
 
 ## Extended Node Types (v0.2.0)
@@ -68,7 +68,7 @@ to backing credentials; agents never see raw keys.
 ## Bead Layout
 
 ```
-~/.breadforge/beads/<owner>/<repo>/
+~/.kiln/beads/<owner>/<repo>/
   work/<N>.json          WorkBead — issue lifecycle
   prs/pr-<N>.json        PRBead — PR state
   merge-queue.json       MergeQueue — sequential merge ordering

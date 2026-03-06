@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from breadforge.beads import (
+from kiln.beads import (
     BeadStore,
     CampaignBead,
     MergeQueueItem,

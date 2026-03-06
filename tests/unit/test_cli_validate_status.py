@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from breadforge.beads import GraphNode
-from breadforge.cli import _format_validate_state
+from kiln.beads import GraphNode
+from kiln.cli import _format_validate_state
 
 
 def _make_validate_node(

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from breadforge.logger import Logger
+from kiln.logger import Logger
 
 
 @pytest.fixture

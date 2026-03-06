@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from breadforge.agents.runner import RunResult
-from breadforge.beads import BeadStore, GraphNode, PRBead, WorkBead
-from breadforge.config import Config
-from breadforge.graph.handlers.build import BuildHandler
-from breadforge.graph.handlers.merge import MergeHandler
-from breadforge.graph.handlers.research import ResearchHandler
+from kiln.agents.runner import RunResult
+from kiln.beads import BeadStore, GraphNode, PRBead, WorkBead
+from kiln.config import Config
+from kiln.graph.handlers.build import BuildHandler
+from kiln.graph.handlers.merge import MergeHandler
+from kiln.graph.handlers.research import ResearchHandler
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -50,8 +50,8 @@ def fake_run_result(
 # ---------------------------------------------------------------------------
 
 
-_SETUP_WORKSPACE = "breadforge.graph.handlers.build._setup_workspace"
-_VERIFY_SCOPE = "breadforge.graph.handlers.build._verify_pr_scope"
+_SETUP_WORKSPACE = "kiln.graph.handlers.build._setup_workspace"
+_VERIFY_SCOPE = "kiln.graph.handlers.build._verify_pr_scope"
 
 
 class TestBuildHandler:
@@ -69,15 +69,15 @@ class TestBuildHandler:
         with (
             patch(_SETUP_WORKSPACE, return_value=None),
             patch(_VERIFY_SCOPE, return_value=[]),
-            patch("breadforge.graph.handlers.build.run_agent", new_callable=AsyncMock) as mock_run,
-            patch("breadforge.graph.handlers.build._get_pr_number", return_value=42),
-            patch("breadforge.graph.handlers.build._claim_issue"),
-            patch("breadforge.graph.handlers.build._unclaim_issue"),
+            patch("kiln.graph.handlers.build.run_agent", new_callable=AsyncMock) as mock_run,
+            patch("kiln.graph.handlers.build._get_pr_number", return_value=42),
+            patch("kiln.graph.handlers.build._claim_issue"),
+            patch("kiln.graph.handlers.build._unclaim_issue"),
             patch(
-                "breadforge.agents.assessor.assess_and_allocate", new_callable=AsyncMock
+                "kiln.agents.assessor.assess_and_allocate", new_callable=AsyncMock
             ) as mock_assess,
         ):
-            from breadforge.agents.assessor import (
+            from kiln.agents.assessor import (
                 AllocationResult,
                 ComplexityEstimate,
                 ComplexityTier,
@@ -106,12 +106,12 @@ class TestBuildHandler:
 
         with (
             patch(_SETUP_WORKSPACE, return_value=None),
-            patch("breadforge.graph.handlers.build.run_agent", new_callable=AsyncMock) as mock_run,
+            patch("kiln.graph.handlers.build.run_agent", new_callable=AsyncMock) as mock_run,
             patch(
-                "breadforge.agents.assessor.assess_and_allocate", new_callable=AsyncMock
+                "kiln.agents.assessor.assess_and_allocate", new_callable=AsyncMock
             ) as mock_assess,
         ):
-            from breadforge.agents.assessor import (
+            from kiln.agents.assessor import (
                 AllocationResult,
                 ComplexityEstimate,
                 ComplexityTier,
@@ -139,13 +139,13 @@ class TestBuildHandler:
 
         with (
             patch(_SETUP_WORKSPACE, return_value=None),
-            patch("breadforge.graph.handlers.build.run_agent", new_callable=AsyncMock) as mock_run,
-            patch("breadforge.graph.handlers.build._get_pr_number", return_value=None),
+            patch("kiln.graph.handlers.build.run_agent", new_callable=AsyncMock) as mock_run,
+            patch("kiln.graph.handlers.build._get_pr_number", return_value=None),
             patch(
-                "breadforge.agents.assessor.assess_and_allocate", new_callable=AsyncMock
+                "kiln.agents.assessor.assess_and_allocate", new_callable=AsyncMock
             ) as mock_assess,
         ):
-            from breadforge.agents.assessor import (
+            from kiln.agents.assessor import (
                 AllocationResult,
                 ComplexityEstimate,
                 ComplexityTier,
@@ -176,14 +176,14 @@ class TestBuildHandler:
         with (
             patch(_SETUP_WORKSPACE, return_value=None),
             patch(_VERIFY_SCOPE, return_value=["src/other.py"]),
-            patch("breadforge.graph.handlers.build.run_agent", new_callable=AsyncMock) as mock_run,
-            patch("breadforge.graph.handlers.build._get_pr_number", return_value=42),
-            patch("breadforge.graph.handlers.build._gh"),
+            patch("kiln.graph.handlers.build.run_agent", new_callable=AsyncMock) as mock_run,
+            patch("kiln.graph.handlers.build._get_pr_number", return_value=42),
+            patch("kiln.graph.handlers.build._gh"),
             patch(
-                "breadforge.agents.assessor.assess_and_allocate", new_callable=AsyncMock
+                "kiln.agents.assessor.assess_and_allocate", new_callable=AsyncMock
             ) as mock_assess,
         ):
-            from breadforge.agents.assessor import (
+            from kiln.agents.assessor import (
                 AllocationResult,
                 ComplexityEstimate,
                 ComplexityTier,
@@ -203,7 +203,7 @@ class TestBuildHandler:
         assert "scope violation" in result.error
 
     def test_uses_plan_artifact_for_assessment(self, store: BeadStore) -> None:
-        from breadforge.beads.types import PlanArtifact
+        from kiln.beads.types import PlanArtifact
 
         # Use a config with no model override so risk_flags take effect
         config_no_override = Config(repo="owner/repo", model="")
@@ -228,8 +228,8 @@ class TestBuildHandler:
         with (
             patch(_SETUP_WORKSPACE, return_value=None),
             patch(_VERIFY_SCOPE, return_value=[]),
-            patch("breadforge.graph.handlers.build.run_agent", new_callable=AsyncMock) as mock_run,
-            patch("breadforge.graph.handlers.build._get_pr_number", return_value=99),
+            patch("kiln.graph.handlers.build.run_agent", new_callable=AsyncMock) as mock_run,
+            patch("kiln.graph.handlers.build._get_pr_number", return_value=99),
         ):
             mock_run.return_value = fake_run_result(exit_code=0)
             handler = BuildHandler(store=store)
@@ -265,7 +265,7 @@ class TestMergeHandler:
             result.stderr = ""
             return result
 
-        with patch("breadforge.graph.handlers.merge._gh", side_effect=_gh_side_effect):
+        with patch("kiln.graph.handlers.merge._gh", side_effect=_gh_side_effect):
             handler = MergeHandler(store=store)
             result = asyncio.run(handler.execute(node, config))
 
@@ -286,7 +286,7 @@ class TestMergeHandler:
             context={"pr_number": 10},
         )
 
-        with patch("breadforge.graph.handlers.merge._pr_ci_passing", return_value=None):
+        with patch("kiln.graph.handlers.merge._pr_ci_passing", return_value=None):
             handler = MergeHandler(store=store)
             result = asyncio.run(handler.execute(node, config))
 
@@ -300,7 +300,7 @@ class TestMergeHandler:
             context={"pr_number": 10},
         )
 
-        with patch("breadforge.graph.handlers.merge._pr_ci_passing", return_value=False):
+        with patch("kiln.graph.handlers.merge._pr_ci_passing", return_value=False):
             handler = MergeHandler(store=store)
             result = asyncio.run(handler.execute(node, config))
 
@@ -340,7 +340,7 @@ class TestResearchHandler:
         )
 
         with patch(
-            "breadforge.graph.handlers.research.run_agent", new_callable=AsyncMock
+            "kiln.graph.handlers.research.run_agent", new_callable=AsyncMock
         ) as mock_run:
             mock_run.return_value = fake_run_result(exit_code=0, stdout="# Research\n\nUse PyJWT.")
             handler = ResearchHandler(store=store)
@@ -361,7 +361,7 @@ class TestResearchHandler:
         )
 
         with patch(
-            "breadforge.graph.handlers.research.run_agent", new_callable=AsyncMock
+            "kiln.graph.handlers.research.run_agent", new_callable=AsyncMock
         ) as mock_run:
             mock_run.return_value = fake_run_result(exit_code=1, stderr="timeout")
             handler = ResearchHandler(store=store)
@@ -378,7 +378,7 @@ class TestResearchHandler:
         )
 
         with patch(
-            "breadforge.graph.handlers.research.run_agent", new_callable=AsyncMock
+            "kiln.graph.handlers.research.run_agent", new_callable=AsyncMock
         ) as mock_run:
             mock_run.return_value = fake_run_result(exit_code=0, stdout="findings")
             handler = ResearchHandler(store=store)

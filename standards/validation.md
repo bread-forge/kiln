@@ -9,7 +9,7 @@ it is accurate, usable, and actionable.
 **Level 1 — Spec assertions** (in every `## Validation` block)
 
 Shell commands that verify the feature exists and returns expected structure.
-These run as part of the `validate` node in the breadforge graph. They must:
+These run as part of the `validate` node in the kiln graph. They must:
 
 - Exit 0 on success
 - Use `--dry-run` or `--json` to avoid side effects
@@ -53,7 +53,7 @@ Add a `## QE` section to any spec that produces user-facing output:
 
 ## What the QE Agent Does
 
-When breadforge dispatches a QE agent for a milestone:
+When kiln dispatches a QE agent for a milestone:
 
 1. **Read the spec** — understand what the feature is supposed to do
 2. **Read the code** — understand what it actually does

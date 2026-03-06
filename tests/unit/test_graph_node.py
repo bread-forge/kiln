@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from breadforge.beads import BeadStore, GraphNode, NodeState, PlanArtifact
+from kiln.beads import BeadStore, GraphNode, NodeState, PlanArtifact
 
 # ---------------------------------------------------------------------------
 # Fixtures

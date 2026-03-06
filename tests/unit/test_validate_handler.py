@@ -22,8 +22,8 @@ from unittest.mock import (
     patch,
 )
 
-from breadforge.config import Config
-from breadforge.graph.handlers.validate import (
+from kiln.config import Config
+from kiln.graph.handlers.validate import (
     MAX_FIX_CYCLES,
     ValidateHandler,
     _add_needs_human_label,
@@ -31,7 +31,7 @@ from breadforge.graph.handlers.validate import (
     _make_bug_node,
     _run_assertion,
 )
-from breadforge.graph.node import make_node
+from kiln.graph.node import make_node
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -72,7 +72,7 @@ class TestRunAssertion:
         assert "err" in stderr
 
     def test_timeout_returns_failure(self) -> None:
-        with patch("breadforge.graph.handlers.validate.subprocess.run") as mock_run:
+        with patch("kiln.graph.handlers.validate.subprocess.run") as mock_run:
             mock_run.side_effect = subprocess.TimeoutExpired(cmd="sleep 100", timeout=60)
             exit_code, stdout, stderr = _run_assertion("sleep 100")
         assert exit_code == 1
@@ -117,7 +117,7 @@ class TestMakeBugNode:
 
 class TestGitHubHelpers:
     def test_add_needs_human_label(self) -> None:
-        with patch("breadforge.graph.handlers.validate.subprocess.run") as mock_run:
+        with patch("kiln.gh.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             _add_needs_human_label("owner/repo", 42)
         mock_run.assert_called_once()
@@ -126,7 +126,7 @@ class TestGitHubHelpers:
         assert "42" in args
 
     def test_close_tracking_issue(self) -> None:
-        with patch("breadforge.graph.handlers.validate.subprocess.run") as mock_run:
+        with patch("kiln.gh.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             _close_tracking_issue("owner/repo", 7, "All passed.")
         mock_run.assert_called_once()
@@ -144,7 +144,7 @@ class TestGitHubHelpers:
 class TestValidateHandlerAllPass:
     def test_all_pass_no_tracking_issue(self) -> None:
         node = _node({"assertions": ["true", "true"]})
-        with patch("breadforge.graph.handlers.validate._run_assertion", return_value=(0, "ok", "")):
+        with patch("kiln.graph.handlers.validate._run_assertion", return_value=(0, "ok", "")):
             result = asyncio.run(ValidateHandler().execute(node, _config()))
         assert result.success is True
         assert result.output["all_passed"] is True
@@ -156,8 +156,8 @@ class TestValidateHandlerAllPass:
     def test_all_pass_closes_tracking_issue(self) -> None:
         node = _node({"assertions": ["true"], "tracking_issue_number": 99})
         with (
-            patch("breadforge.graph.handlers.validate._run_assertion", return_value=(0, "ok", "")),
-            patch("breadforge.graph.handlers.validate._close_tracking_issue") as mock_close,
+            patch("kiln.graph.handlers.validate._run_assertion", return_value=(0, "ok", "")),
+            patch("kiln.graph.handlers.validate._close_tracking_issue") as mock_close,
         ):
             result = asyncio.run(ValidateHandler().execute(node, _config()))
         assert result.success is True
@@ -200,7 +200,7 @@ class TestValidateHandlerFailures:
         def fake_run(assertion):
             return next(results_iter)
 
-        with patch("breadforge.graph.handlers.validate._run_assertion", side_effect=fake_run):
+        with patch("kiln.graph.handlers.validate._run_assertion", side_effect=fake_run):
             return asyncio.run(ValidateHandler().execute(node, _config())), node
 
     def test_single_failure_emits_bug_node(self) -> None:
@@ -236,7 +236,7 @@ class TestValidateHandlerFailures:
     def test_timeout_treated_as_failure(self) -> None:
         node = _node({"assertions": ["sleep 100"]})
         with patch(
-            "breadforge.graph.handlers.validate._run_assertion",
+            "kiln.graph.handlers.validate._run_assertion",
             return_value=(1, "", "assertion timed out after 60s"),
         ):
             result = asyncio.run(ValidateHandler().execute(node, _config()))
@@ -286,8 +286,8 @@ class TestValidateHandlerEscalation:
             }
         )
         with (
-            patch("breadforge.graph.handlers.validate._run_assertion", return_value=(1, "", "err")),
-            patch("breadforge.graph.handlers.validate._add_needs_human_label") as mock_label,
+            patch("kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")),
+            patch("kiln.graph.handlers.validate._add_needs_human_label") as mock_label,
         ):
             result = asyncio.run(ValidateHandler().execute(node, _config()))
         assert result.output["bug_nodes"] == []
@@ -302,7 +302,7 @@ class TestValidateHandlerEscalation:
             }
         )
         with patch(
-            "breadforge.graph.handlers.validate._run_assertion", return_value=(1, "", "err")
+            "kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")
         ):
             result = asyncio.run(ValidateHandler().execute(node, _config()))
         assert len(result.output["bug_nodes"]) == 1
@@ -315,8 +315,8 @@ class TestValidateHandlerEscalation:
             }
         )
         with (
-            patch("breadforge.graph.handlers.validate._run_assertion", return_value=(1, "", "err")),
-            patch("breadforge.graph.handlers.validate._add_needs_human_label") as mock_label,
+            patch("kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")),
+            patch("kiln.graph.handlers.validate._add_needs_human_label") as mock_label,
         ):
             result = asyncio.run(ValidateHandler().execute(node, _config()))
         mock_label.assert_not_called()
@@ -333,8 +333,8 @@ class TestValidateHandlerEscalation:
         )
         side_effects = [(1, "", "err_a"), (1, "", "err_b")]
         with (
-            patch("breadforge.graph.handlers.validate._run_assertion", side_effect=side_effects),
-            patch("breadforge.graph.handlers.validate._add_needs_human_label") as mock_label,
+            patch("kiln.graph.handlers.validate._run_assertion", side_effect=side_effects),
+            patch("kiln.graph.handlers.validate._add_needs_human_label") as mock_label,
         ):
             result = asyncio.run(ValidateHandler().execute(node, _config()))
         assert result.output["escalated"] == ["a"]
@@ -345,7 +345,7 @@ class TestValidateHandlerEscalation:
     def test_fix_cycles_persisted_in_node_context(self) -> None:
         node = _node({"assertions": ["pytest tests/"], "fix_cycles": {}})
         with patch(
-            "breadforge.graph.handlers.validate._run_assertion", return_value=(1, "", "err")
+            "kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")
         ):
             asyncio.run(ValidateHandler().execute(node, _config()))
         # cycle counter incremented from 0 → 1
@@ -372,7 +372,7 @@ uv run ruff check src/
     def test_assertions_extracted_from_spec_markdown(self) -> None:
         node = _node({"spec_markdown": self.SPEC_WITH_ASSERTIONS})
         results = [(0, "ok", ""), (0, "ok", "")]
-        with patch("breadforge.graph.handlers.validate._run_assertion", side_effect=results):
+        with patch("kiln.graph.handlers.validate._run_assertion", side_effect=results):
             result = asyncio.run(ValidateHandler().execute(node, _config()))
         assert result.success is True
         assert len(result.output["passed"]) == 2
@@ -385,7 +385,7 @@ uv run ruff check src/
             }
         )
         with patch(
-            "breadforge.graph.handlers.validate._run_assertion", return_value=(0, "ok", "")
+            "kiln.graph.handlers.validate._run_assertion", return_value=(0, "ok", "")
         ) as mock_run:
             asyncio.run(ValidateHandler().execute(node, _config()))
         assert mock_run.call_count == 1  # only 1 assertion from the list, not 2 from markdown
@@ -418,7 +418,7 @@ class TestValidateHandlerLogger:
     def test_logger_called_on_pass(self) -> None:
         logger = MagicMock()
         node = _node({"assertions": ["true"]})
-        with patch("breadforge.graph.handlers.validate._run_assertion", return_value=(0, "ok", "")):
+        with patch("kiln.graph.handlers.validate._run_assertion", return_value=(0, "ok", "")):
             asyncio.run(ValidateHandler(logger=logger).execute(node, _config()))
         assert logger.info.called
 
@@ -426,7 +426,7 @@ class TestValidateHandlerLogger:
         logger = MagicMock()
         node = _node({"assertions": ["false"]})
         with patch(
-            "breadforge.graph.handlers.validate._run_assertion", return_value=(1, "", "err")
+            "kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")
         ):
             asyncio.run(ValidateHandler(logger=logger).execute(node, _config()))
         assert logger.info.called
@@ -440,8 +440,8 @@ class TestValidateHandlerLogger:
             }
         )
         with (
-            patch("breadforge.graph.handlers.validate._run_assertion", return_value=(1, "", "err")),
-            patch("breadforge.graph.handlers.validate._add_needs_human_label"),
+            patch("kiln.graph.handlers.validate._run_assertion", return_value=(1, "", "err")),
+            patch("kiln.graph.handlers.validate._add_needs_human_label"),
         ):
             asyncio.run(ValidateHandler(logger=logger).execute(node, _config()))
         # Should log at least the escalation message
@@ -449,6 +449,6 @@ class TestValidateHandlerLogger:
 
     def test_no_logger_does_not_raise(self) -> None:
         node = _node({"assertions": ["true"]})
-        with patch("breadforge.graph.handlers.validate._run_assertion", return_value=(0, "ok", "")):
+        with patch("kiln.graph.handlers.validate._run_assertion", return_value=(0, "ok", "")):
             result = asyncio.run(ValidateHandler(logger=None).execute(node, _config()))
         assert result.success is True

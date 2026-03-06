@@ -7,15 +7,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from breadforge.config import Config
-from breadforge.graph.handlers.bug import (
+from kiln.config import Config
+from kiln.graph.handlers.bug import (
     BugHandler,
     _build_issue_body,
     _build_node_for_issue,
     _create_github_issue,
     _truncate,
 )
-from breadforge.graph.node import make_node
+from kiln.graph.node import make_node
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -116,25 +116,25 @@ class TestBuildIssueBody:
 class TestCreateGithubIssue:
     def test_returns_issue_number_from_url(self) -> None:
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/99\n")
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc):
+        with patch("kiln.gh.subprocess.run", return_value=proc):
             number = _create_github_issue("owner/repo", "title", "body", "v1")
         assert number == 99
 
     def test_returns_none_on_nonzero_returncode(self) -> None:
         proc = _completed_proc(returncode=1, stderr="not found")
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc):
+        with patch("kiln.gh.subprocess.run", return_value=proc):
             number = _create_github_issue("owner/repo", "title", "body", "v1")
         assert number is None
 
     def test_returns_none_when_url_unparseable(self) -> None:
         proc = _completed_proc(stdout="not a url\n")
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc):
+        with patch("kiln.gh.subprocess.run", return_value=proc):
             number = _create_github_issue("owner/repo", "title", "body", "v1")
         assert number is None
 
     def test_milestone_included_in_gh_args(self) -> None:
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/7\n")
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc) as mock_run:
+        with patch("kiln.gh.subprocess.run", return_value=proc) as mock_run:
             _create_github_issue("owner/repo", "title", "body", "validate")
         call_args = mock_run.call_args[0][0]
         assert "--milestone" in call_args
@@ -142,7 +142,7 @@ class TestCreateGithubIssue:
 
     def test_labels_bug_and_stage_impl_included(self) -> None:
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/5\n")
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc) as mock_run:
+        with patch("kiln.gh.subprocess.run", return_value=proc) as mock_run:
             _create_github_issue("owner/repo", "title", "body", "v1")
         call_args = mock_run.call_args[0][0]
         # Both labels should appear
@@ -153,21 +153,21 @@ class TestCreateGithubIssue:
 
     def test_empty_milestone_skips_milestone_flag(self) -> None:
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/3\n")
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc) as mock_run:
+        with patch("kiln.gh.subprocess.run", return_value=proc) as mock_run:
             _create_github_issue("owner/repo", "title", "body", "")
         call_args = mock_run.call_args[0][0]
         assert "--milestone" not in call_args
 
     def test_returns_none_when_stdout_has_no_slash(self) -> None:
         proc = _completed_proc(stdout="12345\n")
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc):
+        with patch("kiln.gh.subprocess.run", return_value=proc):
             number = _create_github_issue("owner/repo", "title", "body", "")
         # "12345" rsplit("/", 1) → ["12345"]; int("12345") = 12345 — actually valid
         assert number == 12345
 
     def test_trailing_slash_stripped(self) -> None:
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/42/\n")
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc):
+        with patch("kiln.gh.subprocess.run", return_value=proc):
             number = _create_github_issue("owner/repo", "title", "body", "")
         assert number == 42
 
@@ -234,13 +234,13 @@ class TestBugHandlerExecute:
                 "exit_code": 1,
                 "milestone": "validate",
                 "module": "mod:runner",
-                "files": ["src/breadforge/runner.py"],
+                "files": ["src/kiln/runner.py"],
             }
         )
         config = _make_config()
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/101\n")
 
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc):
+        with patch("kiln.gh.subprocess.run", return_value=proc):
             result = await BugHandler().execute(node, config)
 
         assert result.success is True
@@ -262,7 +262,7 @@ class TestBugHandlerExecute:
         config = _make_config()
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/200\n")
 
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc):
+        with patch("kiln.gh.subprocess.run", return_value=proc):
             result = await BugHandler().execute(node, config)
 
         assert len(result.output["new_nodes"]) == 1
@@ -276,7 +276,7 @@ class TestBugHandlerExecute:
         config = _make_config()
         proc = _completed_proc(returncode=1, stderr="gh error")
 
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc):
+        with patch("kiln.gh.subprocess.run", return_value=proc):
             result = await BugHandler().execute(node, config)
 
         assert result.success is False
@@ -290,7 +290,7 @@ class TestBugHandlerExecute:
         config = _make_config()
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/5\n")
 
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc) as mock_run:
+        with patch("kiln.gh.subprocess.run", return_value=proc) as mock_run:
             await BugHandler().execute(node, config)
 
         call_args = mock_run.call_args[0][0]
@@ -312,7 +312,7 @@ class TestBugHandlerExecute:
         config = _make_config()
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/9\n")
 
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc) as mock_run:
+        with patch("kiln.gh.subprocess.run", return_value=proc) as mock_run:
             await BugHandler().execute(node, config)
 
         call_args = mock_run.call_args[0][0]
@@ -326,7 +326,7 @@ class TestBugHandlerExecute:
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/3\n")
         logger = MagicMock()
 
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc):
+        with patch("kiln.gh.subprocess.run", return_value=proc):
             await BugHandler(logger=logger).execute(node, config)
 
         logger.info.assert_called_once()
@@ -339,7 +339,7 @@ class TestBugHandlerExecute:
         config = _make_config()
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/1\n")
 
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc):
+        with patch("kiln.gh.subprocess.run", return_value=proc):
             result = await BugHandler().execute(node, config)
 
         assert result.success is True
@@ -351,7 +351,7 @@ class TestBugHandlerExecute:
         config = _make_config()
         proc = _completed_proc(stdout="https://github.com/owner/repo/issues/2\n")
 
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc) as mock_run:
+        with patch("kiln.gh.subprocess.run", return_value=proc) as mock_run:
             result = await BugHandler().execute(node, config)
 
         assert result.success is True
@@ -366,7 +366,7 @@ class TestBugHandlerExecute:
         config = _make_config(repo="myorg/myrepo")
         proc = _completed_proc(stdout="https://github.com/myorg/myrepo/issues/8\n")
 
-        with patch("breadforge.graph.handlers.bug.subprocess.run", return_value=proc) as mock_run:
+        with patch("kiln.gh.subprocess.run", return_value=proc) as mock_run:
             await BugHandler().execute(node, config)
 
         call_args = mock_run.call_args[0][0]

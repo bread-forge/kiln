@@ -1,0 +1,545 @@
+"""GraphExecutor — async DAG executor with dynamic graph expansion.
+
+Key design:
+- ExecutionGraph tracks nodes and dependency resolution
+- _add_overlap_edges adds sequential deps between build nodes that touch the same files
+- GraphExecutor drives the async event loop: dispatch ready nodes, handle completions,
+  expand graph when plan nodes emit new_nodes
+- BackendRouter (optional) overrides per-node model selection based on node type
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any
+
+from kiln.beads.types import GraphNode, NodeType
+from kiln.graph.node import BackendRouter, NodeHandler, NodeResult
+
+# Gate node types: abandonment means "gate not held — proceed anyway", not "work failed".
+# Downstream nodes of abandoned gate nodes should still run.
+_GATE_TYPES: frozenset[str] = frozenset({"wait", "consensus"})
+
+if TYPE_CHECKING:
+    from kiln.beads.store import BeadStore
+    from kiln.config import Config
+    from kiln.logger import Logger
+
+
+# ---------------------------------------------------------------------------
+# ExecutionGraph
+# ---------------------------------------------------------------------------
+
+
+class ExecutionGraph:
+    """Tracks nodes and dependency state for the executor loop."""
+
+    def __init__(self, nodes: list[GraphNode] | None = None) -> None:
+        self._nodes: dict[str, GraphNode] = {}
+        if nodes:
+            for node in nodes:
+                self._nodes[node.id] = node
+
+    def add_nodes(self, nodes: list[GraphNode]) -> None:
+        """Dynamically add nodes (e.g. from plan expansion)."""
+        for node in nodes:
+            if node.id not in self._nodes:
+                self._nodes[node.id] = node
+
+    def get_ready(self) -> list[GraphNode]:
+        """Return pending nodes whose dependencies are all done/abandoned."""
+        terminal: set[str] = {
+            nid for nid, n in self._nodes.items() if n.state in ("done", "abandoned")
+        }
+        ready = []
+        for node in self._nodes.values():
+            if node.state != "pending":
+                continue
+            if all(dep in terminal for dep in node.depends_on):
+                ready.append(node)
+        return ready
+
+    def has_pending(self) -> bool:
+        return any(n.state in ("pending", "running") for n in self._nodes.values())
+
+    def get_node(self, node_id: str) -> GraphNode | None:
+        return self._nodes.get(node_id)
+
+    def all_nodes(self) -> list[GraphNode]:
+        return list(self._nodes.values())
+
+
+# ---------------------------------------------------------------------------
+# Overlap detection
+# ---------------------------------------------------------------------------
+
+
+def _add_overlap_edges(build_nodes: list[GraphNode]) -> list[GraphNode]:
+    """Add sequential deps between build nodes touching the same files.
+
+    When multiple build nodes declare the same file in context['files'],
+    they are sequenced alphabetically by module name (deterministic).
+    """
+    nodes_by_id: dict[str, GraphNode] = {n.id: n for n in build_nodes}
+    file_owners: dict[str, list[str]] = defaultdict(list)
+
+    for node in build_nodes:
+        if node.type != "build":
+            continue
+        for f in node.context.get("files", []):
+            file_owners[f].append(node.id)
+
+    for _file, owners in file_owners.items():
+        if len(owners) <= 1:
+            continue
+        # Sort alphabetically for deterministic ordering
+        owners_sorted = sorted(owners)
+        for i in range(len(owners_sorted) - 1):
+            successor = nodes_by_id[owners_sorted[i + 1]]
+            if owners_sorted[i] not in successor.depends_on:
+                successor.depends_on.append(owners_sorted[i])
+
+    return build_nodes
+
+
+# ---------------------------------------------------------------------------
+# ExecutionResult
+# ---------------------------------------------------------------------------
+
+
+class ExecutionResult:
+    """Summary returned when GraphExecutor.run() completes."""
+
+    def __init__(self) -> None:
+        self.done: list[str] = []
+        self.failed: list[str] = []
+        self.abandoned: list[str] = []
+        self.total_cost_usd: float = 0.0
+
+    @property
+    def success(self) -> bool:
+        return not self.failed and not self.abandoned
+
+
+# ---------------------------------------------------------------------------
+# GraphExecutor
+# ---------------------------------------------------------------------------
+
+
+class GraphExecutor:
+    """Async DAG executor."""
+
+    # Node types that represent work dispatch — skipped in dry-run mode.
+    # Plan and research nodes always run (they produce the plan and beads).
+    _DRY_RUN_SKIP_TYPES: frozenset[str] = frozenset(
+        {"build", "merge", "readme", "design_doc", "wait"}
+    )
+
+    def __init__(
+        self,
+        config: Config,
+        handlers: dict[NodeType, NodeHandler],
+        store: BeadStore | None = None,
+        logger: Logger | None = None,
+        concurrency: int = 3,
+        watchdog_interval: float = 60.0,
+        max_node_runtime: float | None = 7200.0,
+        dry_run: bool = False,
+        backend_router: BackendRouter | None = None,
+        max_budget_usd: float | None = None,
+    ) -> None:
+        self._config = config
+        self._handlers = handlers
+        self._store = store
+        self._logger = logger
+        self._concurrency = concurrency
+        self._watchdog_interval = watchdog_interval
+        self._max_node_runtime = max_node_runtime
+        self._dry_run = dry_run
+        self._backend_router = backend_router
+        self._max_budget_usd = max_budget_usd
+        self._total_cost_usd: float = 0.0
+        from kiln.agents.ledger import CostLedger
+
+        self._ledger: CostLedger | None = CostLedger() if not dry_run else None
+
+    def _restore_from_store(self, graph: ExecutionGraph, result: ExecutionResult) -> None:
+        """Restore done node states and replay plan node expansions.
+
+        Only restores nodes recorded as 'done' — abandoned nodes are left as
+        pending so they are re-dispatched on the next run. This lets a re-run
+        act as a repair: done plan/research nodes skip their LLM calls, while
+        previously failed build/merge nodes get a fresh attempt.
+        """
+        if not self._store:
+            return
+        # Process nodes breadth-first: plan node may add new nodes that also need restoring
+        seen: set[str] = set()
+        queue = list(graph.all_nodes())
+        while queue:
+            node = queue.pop(0)
+            if node.id in seen:
+                continue
+            seen.add(node.id)
+            existing = self._store.read_node(node.id)
+            if not existing or existing.state not in ("done", "abandoned", "wont-do"):
+                continue
+            node.state = existing.state  # type: ignore[assignment]
+            if existing.state == "wont-do":
+                # Intentionally skipped — never re-dispatch, even on re-run
+                result.abandoned.append(node.id)
+                continue
+            if existing.state == "abandoned":
+                # Failed — reset to pending so re-run gets a fresh attempt
+                node.state = "pending"  # type: ignore[assignment]
+                self._store.write_node(node)
+                continue
+            # state == "done"
+            node.output = existing.output
+            result.done.append(node.id)
+            # Replay plan node expansion so dependents are in the graph
+            if node.type == "plan" and existing.output and existing.output.get("new_nodes"):
+                new = [GraphNode(**n) for n in existing.output["new_nodes"]]
+                new = _add_overlap_edges(new)
+                graph.add_nodes(new)
+                queue.extend(new)  # also restore their states
+
+    def _recover_running_nodes(self, graph: ExecutionGraph, result: ExecutionResult) -> None:
+        """For nodes the store recorded as 'running' (crashed mid-flight), ask each
+        handler if it can recover state without re-running. BuildHandler checks for
+        an existing PR on the branch; all others return None (re-dispatch)."""
+        if not self._store:
+            return
+        for node in graph.all_nodes():
+            if node.state != "pending":
+                continue  # already restored or not relevant
+            stored = self._store.read_node(node.id)
+            if not stored or stored.state != "running":
+                continue
+            handler = self._handlers.get(node.type)
+            if handler is None:
+                self._store.write_node(node)  # persist pending state before re-dispatch
+                continue
+            recovery = handler.recover(node, self._config)
+            if recovery is None:
+                self._store.write_node(node)  # persist pending state before re-dispatch
+                continue
+            node.output = recovery.output
+            if recovery.success:
+                node.state = "done"  # type: ignore[assignment]
+                result.done.append(node.id)
+                self._log_info(f"recovered node {node.id} as done (was running at crash)")
+            else:
+                node.retry_count = stored.retry_count
+                # leave as pending — will be re-dispatched
+            self._store.write_node(node)
+
+    async def run(self, graph: ExecutionGraph) -> ExecutionResult:
+        result = ExecutionResult()
+        self._restore_from_store(graph, result)
+        self._recover_running_nodes(graph, result)
+        active: dict[str, asyncio.Task[NodeResult]] = {}
+        active_since: dict[str, float] = {}  # node_id → asyncio.get_event_loop().time()
+
+        while graph.has_pending() or active:
+            # Propagate abandonment until stable: a newly abandoned node may unblock
+            # further downstream nodes that also need auto-abandoning.
+            while True:
+                ready = graph.get_ready()
+                newly_abandoned = False
+                for node in ready:
+                    if node.id in active or not node.depends_on:
+                        continue
+                    dep_nodes = [graph.get_node(dep) for dep in node.depends_on]
+                    if (
+                        dep_nodes
+                        and all(dn is not None and dn.state == "abandoned" for dn in dep_nodes)
+                        and any(dn.type not in _GATE_TYPES for dn in dep_nodes if dn is not None)
+                    ):
+                        node.state = "abandoned"  # type: ignore[assignment]
+                        result.abandoned.append(node.id)
+                        if self._store and not self._dry_run:
+                            self._store.write_node(node)
+                        self._log_info(f"node {node.id} auto-abandoned: all dependencies failed")
+                        newly_abandoned = True
+                if not newly_abandoned:
+                    break
+
+            # Fill concurrency slots with remaining pending nodes
+            ready = graph.get_ready()
+            for node in ready[: self._concurrency - len(active)]:
+                if node.id in active:
+                    continue
+                node.state = "running"  # type: ignore[assignment]
+                node.touch_started()
+                if self._store and not self._dry_run and not self._store.claim_node(node):
+                    # Another process already claimed this node — skip it.
+                    self._log_info(f"node {node.id} already claimed by another process — skipping")
+                    node.state = "pending"  # type: ignore[assignment]
+                    continue
+                active[node.id] = asyncio.create_task(self._dispatch(node), name=node.id)
+                active_since[node.id] = asyncio.get_event_loop().time()
+
+            if not active:
+                # No active tasks and nothing became ready — check for deadlock
+                if graph.has_pending():
+                    self._log_error("executor deadlock: pending nodes with no ready tasks")
+                break
+
+            done_tasks, _ = await asyncio.wait(
+                list(active.values()),
+                timeout=self._watchdog_interval,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            # Watchdog: cancel tasks that have exceeded max_node_runtime
+            if self._max_node_runtime is not None:
+                now = asyncio.get_event_loop().time()
+                for node_id, task in list(active.items()):
+                    elapsed = now - active_since.get(node_id, now)
+                    if elapsed > self._max_node_runtime and not task.done():
+                        task.cancel()
+                        self._log_error(
+                            f"node {node_id} killed by watchdog after {elapsed:.0f}s "
+                            f"(max {self._max_node_runtime:.0f}s)"
+                        )
+
+            for task in done_tasks:
+                node_id = task.get_name()
+                active.pop(node_id, None)
+                active_since.pop(node_id, None)
+                node = graph.get_node(node_id)
+                if node is None:
+                    continue
+
+                try:
+                    node_result = task.result()
+                except Exception as e:
+                    node_result = NodeResult(success=False, error=str(e))
+
+                await self._handle_completion(node, node_result, graph, result)
+
+        return result
+
+    async def _dispatch(self, node: GraphNode) -> NodeResult:
+        if self._dry_run and node.type in self._DRY_RUN_SKIP_TYPES:
+            return await self._dry_run_dispatch(node)
+        handler = self._handlers.get(node.type)
+        if handler is None:
+            return NodeResult(success=False, error=f"no handler for type {node.type!r}")
+        # Apply BackendRouter model override when the node has no explicit model
+        effective_config = self._config
+        if self._backend_router and not node.assigned_model:
+            routed_model = self._backend_router.route(node.type)
+            if routed_model and routed_model != self._config.model:
+                from dataclasses import replace
+
+                effective_config = replace(self._config, model=routed_model)
+        try:
+            return await handler.execute(node, effective_config)
+        except Exception as e:
+            return NodeResult(success=False, error=str(e))
+
+    async def _dry_run_dispatch(self, node: GraphNode) -> NodeResult:
+        """Dry-run: skip build/merge/readme dispatch; create WorkBeads for build nodes."""
+        if node.type == "build":
+            issue_number: int | None = node.context.get("issue_number")
+            module: str = node.context.get("module", node.id)
+            files: list[str] = node.context.get("files", [])
+            if issue_number and self._store:
+                from kiln.beads.types import WorkBead
+
+                existing = self._store.read_work_bead(issue_number)
+                if not existing:
+                    title = node.context.get("issue_title") or f"impl: {module}"
+                    bead = WorkBead(
+                        issue_number=issue_number,
+                        repo=self._config.repo,
+                        title=title,
+                        state="open",  # type: ignore[arg-type]
+                        node_id=node.id,
+                    )
+                    self._store.write_work_bead(bead)
+            self._log_info(
+                f"[dry-run] build node {node.id}: module={module!r} files={files} "
+                f"issue={issue_number} — WorkBead created, agent not dispatched"
+            )
+            return NodeResult(
+                success=True,
+                output={
+                    "dry_run": True,
+                    "module": module,
+                    "issue_number": issue_number,
+                    "files": files,
+                },
+            )
+        # merge, readme, design_doc, wait — skip without marking done in store
+        self._log_info(f"[dry-run] skipping {node.type} node {node.id}")
+        return NodeResult(success=True, output={"dry_run": True, "skipped": True})
+
+    async def _handle_completion(
+        self,
+        node: GraphNode,
+        result: NodeResult,
+        graph: ExecutionGraph,
+        exec_result: ExecutionResult,
+    ) -> None:
+        node.touch_completed()
+        node.output = result.output
+        if not result.success and result.error:
+            node.output = {**node.output, "_error": result.error}
+
+        # Accumulate cost and enforce budget cap
+        if result.cost_usd is not None:
+            self._total_cost_usd += result.cost_usd
+            exec_result.total_cost_usd = self._total_cost_usd
+            if self._ledger:
+                run_id = self._config.repo.replace("/", "-")
+                self._ledger.append(
+                    run_id=run_id,
+                    node_id=node.id,
+                    node_type=node.type,
+                    model=node.assigned_model or self._config.model,
+                    cost_usd=result.cost_usd,
+                )
+            if self._max_budget_usd and self._total_cost_usd >= self._max_budget_usd:
+                self._log_error(
+                    f"budget cap ${self._max_budget_usd:.2f} exceeded "
+                    f"(${self._total_cost_usd:.4f} spent) — abandoning remaining nodes"
+                )
+                for n in graph.all_nodes():
+                    if n.state == "pending":
+                        n.state = "abandoned"  # type: ignore[assignment]
+                        exec_result.abandoned.append(n.id)
+                        if self._store and not self._dry_run:
+                            self._store.write_node(n)
+
+        if result.success:
+            node.state = "done"  # type: ignore[assignment]
+            exec_result.done.append(node.id)
+            # In dry-run mode nothing is persisted — a real run must start fresh.
+            if self._dry_run:
+                if node.type == "plan" and result.output.get("new_nodes"):
+                    new = [GraphNode(**n) for n in result.output["new_nodes"]]
+                    new = _add_overlap_edges(new)
+                    graph.add_nodes(new)
+                    self._log_info(f"plan {node.id} expanded graph: +{len(new)} nodes")
+                return
+            self._log_info(f"node {node.id} done")
+
+            # Plan nodes may emit new nodes
+            if node.type == "plan" and result.output.get("new_nodes"):
+                new = [GraphNode(**n) for n in result.output["new_nodes"]]
+                new = _add_overlap_edges(new)
+                # Restore terminal states before adding to graph (skip completed work)
+                if self._store:
+                    for n in new:
+                        existing = self._store.read_node(n.id)
+                        if existing and existing.state in ("done", "abandoned"):
+                            n.state = existing.state  # type: ignore[assignment]
+                            n.output = existing.output
+                            n.retry_count = existing.retry_count
+                            if n.state == "done":
+                                exec_result.done.append(n.id)
+                            else:
+                                exec_result.abandoned.append(n.id)
+                graph.add_nodes(new)
+                if self._store:
+                    for n in new:
+                        if n.state == "pending":  # only write new nodes, not restored ones
+                            self._store.write_node(n)
+                self._log_info(f"plan {node.id} expanded graph: +{len(new)} nodes")
+        else:
+            # abandon=True means skip retries entirely
+            if result.abandon:
+                node.state = "abandoned"  # type: ignore[assignment]
+                exec_result.abandoned.append(node.id)
+                self._log_error(f"node {node.id} abandoned immediately: {result.error}")
+            else:
+                node.retry_count += 1
+                if node.retry_count < node.max_retries:
+                    # Before re-dispatching, ask the handler if it can recover
+                    # (e.g. build node: PR already exists despite agent reporting failure)
+                    handler = self._handlers.get(node.type)
+                    if handler is not None:
+                        recovery = handler.recover(node, self._config)
+                        if recovery is not None and recovery.success:
+                            node.output = recovery.output
+                            node.state = "done"  # type: ignore[assignment]
+                            exec_result.done.append(node.id)
+                            self._log_info(f"node {node.id} recovered on retry (PR already exists)")
+                            if self._store and not self._dry_run:
+                                self._store.write_node(node)
+                            return
+                    node.state = "pending"  # type: ignore[assignment]
+                    self._log_info(
+                        f"node {node.id} failed (attempt {node.retry_count}), re-queuing"
+                    )
+                else:
+                    node.state = "abandoned"  # type: ignore[assignment]
+                    exec_result.abandoned.append(node.id)
+                    self._log_error(
+                        f"node {node.id} abandoned after {node.retry_count} attempts: {result.error}"
+                    )
+
+        if self._store and not self._dry_run:
+            self._store.write_node(node)
+
+    def _log_info(self, message: str, **kwargs: Any) -> None:
+        if self._logger:
+            self._logger.info(message, **kwargs)
+
+    def _log_error(self, message: str, **kwargs: Any) -> None:
+        if self._logger:
+            self._logger.error(message, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# make_handlers factory
+# ---------------------------------------------------------------------------
+
+
+def make_handlers(
+    store: BeadStore | None = None,
+    logger: Logger | None = None,
+) -> dict[NodeType, NodeHandler]:
+    """Instantiate all handlers. Import lazily to avoid circular deps."""
+    from kiln.graph.handlers.build import BuildHandler
+    from kiln.graph.handlers.consensus import ConsensusHandler, DesignDocHandler, WaitHandler
+    from kiln.graph.handlers.merge import MergeHandler
+    from kiln.graph.handlers.plan import PlanHandler
+    from kiln.graph.handlers.readme import ReadmeHandler
+    from kiln.graph.handlers.research import ResearchHandler
+
+    handlers: dict[NodeType, NodeHandler] = {
+        "plan": PlanHandler(store=store, logger=logger),
+        "research": ResearchHandler(store=store, logger=logger),
+        "build": BuildHandler(store=store, logger=logger),
+        "merge": MergeHandler(store=store, logger=logger),
+        "readme": ReadmeHandler(store=store, logger=logger),
+        # consensus module
+        "wait": WaitHandler(store=store, logger=logger),
+        "consensus": ConsensusHandler(store=store, logger=logger),
+        "design_doc": DesignDocHandler(store=store, logger=logger),
+    }
+
+    # validate and bug handlers — imported defensively; these handler files may
+    # be built in a parallel milestone PR.  If they exist, register them; if not,
+    # the executor will return a "no handler" error for those node types at
+    # runtime (better than crashing at import time).
+    try:
+        from kiln.graph.handlers.validate import ValidateHandler
+
+        handlers["validate"] = ValidateHandler(store=store, logger=logger)  # type: ignore[index]
+    except ImportError:
+        pass
+
+    try:
+        from kiln.graph.handlers.bug import BugHandler
+
+        handlers["bug"] = BugHandler(store=store, logger=logger)  # type: ignore[index]
+    except ImportError:
+        pass
+
+    return handlers

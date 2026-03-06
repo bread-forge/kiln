@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from breadforge.spec import parse_spec, validate_spec
+from kiln.spec import parse_spec, validate_spec
 
 SAMPLE_SPEC = """# MyProject v1.2.0 — Feature Name
 

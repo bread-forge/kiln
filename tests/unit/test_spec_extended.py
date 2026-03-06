@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from breadforge.spec import (
+from kiln.spec import (
     parse_campaign,
     parse_spec,
 )
@@ -188,7 +188,7 @@ class TestParseCampaign:
 # Campaign
 
 ```
-breadforge run \\
+kiln run \\
   specs/v1.0.md \\
   specs/v2.0.md
 ```
@@ -200,12 +200,12 @@ breadforge run \\
         assert paths[0].name == "v1.0.md"
         assert paths[1].name == "v2.0.md"
 
-    def test_brimstone_command_also_accepted(self, tmp_path: Path) -> None:
+    def test_kiln_command_accepted(self, tmp_path: Path) -> None:
         campaign_content = """\
 # Campaign
 
 ```
-brimstone run \\
+kiln run \\
   specs/v1.0.md
 ```
 """
@@ -227,7 +227,7 @@ brimstone run \\
 # Campaign
 
 ```
-breadforge run \\
+kiln run \\
   --repo owner/repo \\
   --milestone v1.0 \\
   specs/v1.0.md
@@ -244,7 +244,7 @@ breadforge run \\
 # Campaign
 
 ```
-breadforge run \\
+kiln run \\
   specs/v1.0.md \\
   some-flag \\
   specs/v2.0.md

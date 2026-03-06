@@ -1,4 +1,4 @@
-"""Unit tests for breadforge CLI."""
+"""Unit tests for kiln CLI."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from breadforge.beads import BeadStore, GraphNode, WorkBead
-from breadforge.cli import (
+from kiln.beads import BeadStore, GraphNode, WorkBead
+from kiln.cli import (
     _build_status_table,
     _ensure_milestone,
     _file_issue,
@@ -21,7 +21,7 @@ from breadforge.cli import (
     _seed_work_beads,
     app,
 )
-from breadforge.config import Config
+from kiln.config import Config
 
 runner = CliRunner()
 
@@ -50,7 +50,7 @@ def store(config: Config) -> BeadStore:
 
 @pytest.fixture
 def env_with_beads(beads_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("BREADFORGE_BEADS_DIR", str(beads_dir))
+    monkeypatch.setenv("KILN_BEADS_DIR", str(beads_dir))
 
 
 # ---------------------------------------------------------------------------

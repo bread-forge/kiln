@@ -6,7 +6,7 @@ tier selection, approval gates, confidence triage) where a single model output
 is insufficient.
 
 This file defines the handler inline; production code will go in
-src/breadforge/graph/handlers/consensus.py.
+src/kiln/graph/handlers/consensus.py.
 
 Behavioral contract:
   - Collects responses from n_voters completions
@@ -30,10 +30,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from breadforge.beads.types import GraphNode
-from breadforge.config import Config
-from breadforge.graph.executor import ExecutionGraph, GraphExecutor
-from breadforge.graph.node import NodeResult
+from kiln.beads.types import GraphNode
+from kiln.config import Config
+from kiln.graph.executor import ExecutionGraph, GraphExecutor
+from kiln.graph.node import NodeResult
 
 # ---------------------------------------------------------------------------
 # ConsensusHandler implementation

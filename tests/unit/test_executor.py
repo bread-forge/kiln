@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from breadforge.beads import BeadStore, GraphNode
-from breadforge.config import Config
-from breadforge.graph.executor import (
+from kiln.beads import BeadStore, GraphNode
+from kiln.config import Config
+from kiln.graph.executor import (
     ExecutionGraph,
     GraphExecutor,
     _add_overlap_edges,
 )
-from breadforge.graph.node import NodeResult
+from kiln.graph.node import NodeResult
 
 # ---------------------------------------------------------------------------
 # Fixtures

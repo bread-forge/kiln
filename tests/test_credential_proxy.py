@@ -7,7 +7,7 @@ backing credential, and forwards the API call — limiting blast radius if a
 sub-agent leaks its credential.
 
 This file defines the CredentialProxy contract; production implementation will
-live in src/breadforge/credentials.py.
+live in src/kiln/credentials.py.
 
 Behavioral contract:
   - issue_token(service, scope) returns a token string
@@ -26,8 +26,8 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from breadforge.beads.types import GraphNode
-from breadforge.config import Config
+from kiln.beads.types import GraphNode
+from kiln.config import Config
 
 # ---------------------------------------------------------------------------
 # CredentialProxy implementation (contract under test)
@@ -106,16 +106,16 @@ class CredentialProxy:
         required: list[str] = node.context.get("required_services", [])
         env: dict[str, str] = {}
         service_env_keys: dict[str, str] = {
-            "anthropic": "BREADFORGE_ANTHROPIC_TOKEN",
-            "google": "BREADFORGE_GOOGLE_TOKEN",
-            "openai": "BREADFORGE_OPENAI_TOKEN",
-            "github": "BREADFORGE_GH_TOKEN",
+            "anthropic": "KILN_ANTHROPIC_TOKEN",
+            "google": "KILN_GOOGLE_TOKEN",
+            "openai": "KILN_OPENAI_TOKEN",
+            "github": "KILN_GH_TOKEN",
         }
         for service in required:
             if service not in self._credentials:
                 continue
             token = self.issue_token(service, scope=node.id)
-            env_key = service_env_keys.get(service, f"BREADFORGE_{service.upper()}_TOKEN")
+            env_key = service_env_keys.get(service, f"KILN_{service.upper()}_TOKEN")
             env[env_key] = token
         return env
 
@@ -238,8 +238,8 @@ class TestCredentialProxyEnvForNode:
             context={"required_services": ["anthropic"]},
         )
         env = proxy.env_for_node(node)
-        assert "BREADFORGE_ANTHROPIC_TOKEN" in env
-        token = env["BREADFORGE_ANTHROPIC_TOKEN"]
+        assert "KILN_ANTHROPIC_TOKEN" in env
+        token = env["KILN_ANTHROPIC_TOKEN"]
         # Token should be resolvable
         resolved = proxy.resolve_token(token)
         assert resolved is not None
@@ -255,7 +255,7 @@ class TestCredentialProxyEnvForNode:
         # Raw key must not appear in env values
         raw_key = "AIza-test-key-00000"
         assert raw_key not in env.values()
-        assert "BREADFORGE_GOOGLE_TOKEN" in env
+        assert "KILN_GOOGLE_TOKEN" in env
 
     def test_env_is_empty_for_node_with_no_services(self, proxy: CredentialProxy) -> None:
         node = GraphNode(id="plan-1", type="plan", context={})
@@ -269,7 +269,7 @@ class TestCredentialProxyEnvForNode:
             context={"required_services": ["anthropic", "unknown_service"]},
         )
         env = proxy.env_for_node(node)
-        assert "BREADFORGE_ANTHROPIC_TOKEN" in env
+        assert "KILN_ANTHROPIC_TOKEN" in env
         # unknown_service silently skipped
         assert len(env) == 1
 
@@ -286,7 +286,7 @@ class TestCredentialProxyEnvForNode:
         )
         env_a = proxy.env_for_node(node_a)
         env_b = proxy.env_for_node(node_b)
-        assert env_a["BREADFORGE_ANTHROPIC_TOKEN"] != env_b["BREADFORGE_ANTHROPIC_TOKEN"]
+        assert env_a["KILN_ANTHROPIC_TOKEN"] != env_b["KILN_ANTHROPIC_TOKEN"]
 
     def test_register_new_service_then_issue(self, proxy: CredentialProxy) -> None:
         proxy.register("slack", "xoxb-test-token")

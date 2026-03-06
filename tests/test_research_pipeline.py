@@ -8,7 +8,7 @@ Covers:
     (Gemini, GPT-4.1) while build nodes stay on Claude
 
 The BackendRouter class is defined here to specify the contract; production
-implementation will live in src/breadforge/graph/backends.py.
+implementation will live in src/kiln/graph/backends.py.
 """
 
 from __future__ import annotations
@@ -18,11 +18,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from breadforge.agents.runner import RunResult
-from breadforge.beads import BeadStore
-from breadforge.beads.types import GraphNode
-from breadforge.config import Config
-from breadforge.graph.handlers.research import ResearchHandler
+from kiln.agents.runner import RunResult
+from kiln.beads import BeadStore
+from kiln.beads.types import GraphNode
+from kiln.config import Config
+from kiln.graph.handlers.research import ResearchHandler
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -65,7 +65,7 @@ def _research_node(
 
 
 class TestResearchHandler:
-    @patch("breadforge.graph.handlers.research.run_agent")
+    @patch("kiln.graph.handlers.research.run_agent")
     async def test_execute_success_returns_findings(
         self, mock_run: AsyncMock, config: Config
     ) -> None:
@@ -77,7 +77,7 @@ class TestResearchHandler:
         assert "findings" in result.output
         assert "Rate limits" in result.output["findings"]
 
-    @patch("breadforge.graph.handlers.research.run_agent")
+    @patch("kiln.graph.handlers.research.run_agent")
     async def test_execute_stores_findings(
         self, mock_run: AsyncMock, config: Config, store: BeadStore
     ) -> None:
@@ -91,7 +91,7 @@ class TestResearchHandler:
         assert stored is not None
         assert "5000/hr" in stored
 
-    @patch("breadforge.graph.handlers.research.run_agent")
+    @patch("kiln.graph.handlers.research.run_agent")
     async def test_execute_agent_failure_propagates(
         self, mock_run: AsyncMock, config: Config
     ) -> None:
@@ -102,7 +102,7 @@ class TestResearchHandler:
         assert not result.success
         assert "exit" in (result.error or "").lower()
 
-    @patch("breadforge.graph.handlers.research.run_agent")
+    @patch("kiln.graph.handlers.research.run_agent")
     async def test_empty_unknowns_returns_success(
         self, mock_run: AsyncMock, config: Config
     ) -> None:
@@ -113,7 +113,7 @@ class TestResearchHandler:
         assert result.output.get("findings") == ""
         mock_run.assert_not_called()
 
-    @patch("breadforge.graph.handlers.research.run_agent")
+    @patch("kiln.graph.handlers.research.run_agent")
     async def test_node_id_included_in_output(self, mock_run: AsyncMock, config: Config) -> None:
         mock_run.return_value = _run_result(stdout="some findings")
         handler = ResearchHandler()
@@ -121,7 +121,7 @@ class TestResearchHandler:
         result = await handler.execute(node, config)
         assert result.output.get("node_id") == node.id
 
-    @patch("breadforge.graph.handlers.research.run_agent")
+    @patch("kiln.graph.handlers.research.run_agent")
     async def test_logger_called_on_success(self, mock_run: AsyncMock, config: Config) -> None:
         mock_run.return_value = _run_result(stdout="findings data")
         logger = MagicMock()
@@ -228,7 +228,7 @@ class TestBackendRouterModelSelection:
 
 
 class TestResearchPipelineWithRouting:
-    @patch("breadforge.graph.handlers.research.run_agent")
+    @patch("kiln.graph.handlers.research.run_agent")
     async def test_research_handler_uses_routed_model(
         self, mock_run: AsyncMock, config: Config
     ) -> None:

@@ -6,13 +6,13 @@ import asyncio
 import json
 from unittest.mock import AsyncMock, patch
 
-from breadforge.agents.assessor import (
+from kiln.agents.assessor import (
     Assessor,
     ComplexityTier,
     assess_and_allocate,
     assess_from_plan_artifact,
 )
-from breadforge.beads.types import PlanArtifact
+from kiln.beads.types import PlanArtifact
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -196,7 +196,7 @@ class TestAssessFromPlanArtifact:
         assert result.tier == ComplexityTier.MEDIUM
 
     def test_env_override_takes_precedence(self, monkeypatch) -> None:
-        monkeypatch.setenv("BREADFORGE_MODEL", "my-custom-model")
+        monkeypatch.setenv("KILN_MODEL", "my-custom-model")
         artifact = make_artifact(confidence=0.1, risk_flags=["security"])
         result = assess_from_plan_artifact(artifact, "core")
         assert result.model == "my-custom-model"
@@ -238,7 +238,7 @@ class TestAssessFromPlanArtifact:
 
 class TestAssessAndAllocate:
     def test_env_override_skips_llm(self, monkeypatch) -> None:
-        monkeypatch.setenv("BREADFORGE_MODEL", "override-model")
+        monkeypatch.setenv("KILN_MODEL", "override-model")
         alloc, estimate = asyncio.run(assess_and_allocate("Title", "Body"))
         assert alloc.model == "override-model"
         assert alloc.overridden is True

@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from breadforge.beads import BeadStore
-from breadforge.config import Config
-from breadforge.logger import Logger
-from breadforge.monitor.anomaly import AnomalyBead, AnomalyKind, AnomalyStore
+from kiln.beads import BeadStore
+from kiln.config import Config
+from kiln.logger import Logger
+from kiln.monitor.anomaly import AnomalyBead, AnomalyKind, AnomalyStore
 
 
 @pytest.fixture
@@ -33,9 +33,9 @@ def logger(tmp_path: Path) -> Logger:
 
 class TestRunMonitor:
     def test_once_no_anomalies(self, store: BeadStore, config: Config, logger: Logger) -> None:
-        from breadforge.monitor.loop import run_monitor
+        from kiln.monitor.loop import run_monitor
 
-        with patch("breadforge.monitor.detect._gh") as mock_gh:
+        with patch("kiln.monitor.detect._gh") as mock_gh:
             mock_gh.return_value = MagicMock(returncode=0, stdout="[]")
             asyncio.run(run_monitor(store, config, logger, once=True, interval_seconds=0))
         # Should complete without error
@@ -46,8 +46,8 @@ class TestRunMonitor:
         import json
         from datetime import UTC, datetime, timedelta
 
-        from breadforge.beads.types import WorkBead
-        from breadforge.monitor.loop import run_monitor
+        from kiln.beads.types import WorkBead
+        from kiln.monitor.loop import run_monitor
 
         # Inject a stuck issue
         bead = WorkBead(issue_number=10, repo="owner/repo", title="Stuck")
@@ -58,11 +58,11 @@ class TestRunMonitor:
 
         repair_auto = AsyncMock()
         repair_agent = AsyncMock()
-        with patch("breadforge.monitor.detect._gh") as mock_gh:
+        with patch("kiln.monitor.detect._gh") as mock_gh:
             mock_gh.return_value = MagicMock(returncode=0, stdout="[]")
             with (
-                patch("breadforge.monitor.loop._repair_auto", repair_auto),
-                patch("breadforge.monitor.loop._repair_agent", repair_agent),
+                patch("kiln.monitor.loop._repair_auto", repair_auto),
+                patch("kiln.monitor.loop._repair_agent", repair_agent),
             ):
                 asyncio.run(
                     run_monitor(store, config, logger, once=True, dry_run=True, interval_seconds=0)
@@ -74,7 +74,7 @@ class TestRunMonitor:
     def test_once_repairs_auto_tier(
         self, store: BeadStore, config: Config, logger: Logger, tmp_path: Path
     ) -> None:
-        from breadforge.monitor.loop import run_monitor
+        from kiln.monitor.loop import run_monitor
 
         # Pre-populate an anomaly bead requiring auto repair
         astore = AnomalyStore(config.beads_dir, config.repo)
@@ -91,11 +91,11 @@ class TestRunMonitor:
 
         repair_auto = AsyncMock()
         repair_agent = AsyncMock()
-        with patch("breadforge.monitor.detect._gh") as mock_gh:
+        with patch("kiln.monitor.detect._gh") as mock_gh:
             mock_gh.return_value = MagicMock(returncode=0, stdout="[]")
             with (
-                patch("breadforge.monitor.loop._repair_auto", repair_auto),
-                patch("breadforge.monitor.loop._repair_agent", repair_agent),
+                patch("kiln.monitor.loop._repair_auto", repair_auto),
+                patch("kiln.monitor.loop._repair_agent", repair_agent),
             ):
                 asyncio.run(
                     run_monitor(store, config, logger, once=True, dry_run=False, interval_seconds=0)
@@ -107,7 +107,7 @@ class TestRunMonitor:
     def test_once_repairs_agent_tier(
         self, store: BeadStore, config: Config, logger: Logger, tmp_path: Path
     ) -> None:
-        from breadforge.monitor.loop import run_monitor
+        from kiln.monitor.loop import run_monitor
 
         astore = AnomalyStore(config.beads_dir, config.repo)
         anomaly = AnomalyBead(
@@ -121,11 +121,11 @@ class TestRunMonitor:
 
         repair_auto = AsyncMock()
         repair_agent = AsyncMock()
-        with patch("breadforge.monitor.detect._gh") as mock_gh:
+        with patch("kiln.monitor.detect._gh") as mock_gh:
             mock_gh.return_value = MagicMock(returncode=0, stdout="[]")
             with (
-                patch("breadforge.monitor.loop._repair_auto", repair_auto),
-                patch("breadforge.monitor.loop._repair_agent", repair_agent),
+                patch("kiln.monitor.loop._repair_auto", repair_auto),
+                patch("kiln.monitor.loop._repair_agent", repair_agent),
             ):
                 asyncio.run(
                     run_monitor(store, config, logger, once=True, dry_run=False, interval_seconds=0)
@@ -137,7 +137,7 @@ class TestRunMonitor:
     def test_max_repair_attempts_skips_anomaly(
         self, store: BeadStore, config: Config, logger: Logger, tmp_path: Path
     ) -> None:
-        from breadforge.monitor.loop import run_monitor
+        from kiln.monitor.loop import run_monitor
 
         astore = AnomalyStore(config.beads_dir, config.repo)
         anomaly = AnomalyBead(
@@ -151,9 +151,9 @@ class TestRunMonitor:
         astore.write(anomaly)
 
         repair_agent = AsyncMock()
-        with patch("breadforge.monitor.detect._gh") as mock_gh:
+        with patch("kiln.monitor.detect._gh") as mock_gh:
             mock_gh.return_value = MagicMock(returncode=0, stdout="[]")
-            with patch("breadforge.monitor.loop._repair_agent", repair_agent):
+            with patch("kiln.monitor.loop._repair_agent", repair_agent):
                 asyncio.run(
                     run_monitor(
                         store,
@@ -175,8 +175,8 @@ class TestRunMonitor:
         import json
         from datetime import UTC, datetime, timedelta
 
-        from breadforge.beads.types import WorkBead
-        from breadforge.monitor.loop import run_monitor
+        from kiln.beads.types import WorkBead
+        from kiln.monitor.loop import run_monitor
 
         astore = AnomalyStore(config.beads_dir, config.repo)
         existing = AnomalyBead(
@@ -196,9 +196,9 @@ class TestRunMonitor:
         (store._work_dir / "10.json").write_text(json.dumps(data))
 
         repair_agent = AsyncMock()
-        with patch("breadforge.monitor.detect._gh") as mock_gh:
+        with patch("kiln.monitor.detect._gh") as mock_gh:
             mock_gh.return_value = MagicMock(returncode=0, stdout="[]")
-            with patch("breadforge.monitor.loop._repair_agent", repair_agent):
+            with patch("kiln.monitor.loop._repair_agent", repair_agent):
                 asyncio.run(
                     run_monitor(store, config, logger, once=True, dry_run=True, interval_seconds=0)
                 )

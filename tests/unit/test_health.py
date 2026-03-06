@@ -6,7 +6,7 @@ import json
 import os
 from unittest.mock import MagicMock, patch
 
-from breadforge.health import CheckStatus, _check_bot_collaborator
+from kiln.health import CheckStatus, _check_bot_collaborator
 
 
 def _proc(returncode: int = 0, stdout: str = "", stderr: str = "") -> MagicMock:
@@ -57,7 +57,7 @@ class TestCheckBotCollaborator:
         with patch("subprocess.run", side_effect=responses):
             result = _check_bot_collaborator("owner/repo", "")
         assert result.status == CheckStatus.FAIL
-        assert "BREADFORGE_GH_TOKEN" in result.message
+        assert "KILN_GH_TOKEN" in result.message
 
     def test_invitation_list_bad_json_treated_as_zero(self) -> None:
         responses = [
@@ -161,7 +161,7 @@ class TestCheckBotCollaborator:
 
 class TestBotTokenValidation:
     def _run_checks(self, token: str, token_http_code: str):
-        from breadforge.health import run_health_checks
+        from kiln.health import run_health_checks
 
         def fake_run(cmd, **kwargs):
             cmd_str = " ".join(str(c) for c in cmd)
@@ -176,7 +176,7 @@ class TestBotTokenValidation:
             return _proc(0)
 
         env = (
-            {"BREADFORGE_GH_TOKEN": token, "ANTHROPIC_API_KEY": "x"}
+            {"KILN_GH_TOKEN": token, "ANTHROPIC_API_KEY": "x"}
             if token
             else {"ANTHROPIC_API_KEY": "x"}
         )

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from breadforge.graph.node import (
+from kiln.graph.node import (
     BackendRouter,
     CredentialProxy,
     NodeResult,
@@ -100,9 +100,9 @@ class TestBackendRouter:
 
     def test_from_env_custom_values(self) -> None:
         env = {
-            "BREADFORGE_BUILD_MODEL": "claude-opus-4-6",
-            "BREADFORGE_RESEARCH_MODEL": "gemini-2.5-pro",
-            "BREADFORGE_DESIGN_MODEL": "gpt-4.1",
+            "KILN_BUILD_MODEL": "claude-opus-4-6",
+            "KILN_RESEARCH_MODEL": "gemini-2.5-pro",
+            "KILN_DESIGN_MODEL": "gpt-4.1",
         }
         with patch.dict(os.environ, env):
             router = BackendRouter.from_env()
@@ -112,7 +112,7 @@ class TestBackendRouter:
 
     def test_from_env_empty_string_research_model(self) -> None:
         """Empty string env var → falls back to build_model."""
-        with patch.dict(os.environ, {"BREADFORGE_RESEARCH_MODEL": ""}):
+        with patch.dict(os.environ, {"KILN_RESEARCH_MODEL": ""}):
             router = BackendRouter.from_env()
         assert router.research_model == router.build_model
 

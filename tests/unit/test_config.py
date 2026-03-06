@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from breadforge.config import Config, Registry, RepoEntry
+from kiln.config import Config, Registry, RepoEntry
 
 
 class TestConfig:
@@ -13,9 +13,9 @@ class TestConfig:
         assert config.agent_timeout_minutes == 60
 
     def test_from_env(self, monkeypatch) -> None:
-        monkeypatch.setenv("BREADFORGE_CONCURRENCY", "5")
-        monkeypatch.setenv("BREADFORGE_MODEL", "claude-opus-4-6")
-        monkeypatch.setenv("BREADFORGE_MAX_RETRIES", "2")
+        monkeypatch.setenv("KILN_CONCURRENCY", "5")
+        monkeypatch.setenv("KILN_MODEL", "claude-opus-4-6")
+        monkeypatch.setenv("KILN_MAX_RETRIES", "2")
         config = Config.from_env("owner/repo")
         assert config.concurrency == 5
         assert config.model == "claude-opus-4-6"
@@ -23,13 +23,13 @@ class TestConfig:
 
     def test_beads_dir_default(self) -> None:
         config = Config(repo="owner/repo")
-        assert ".breadforge" in str(config.beads_dir)
+        assert ".kiln" in str(config.beads_dir)
         assert "beads" in str(config.beads_dir)
 
 
 class TestRegistry:
     def test_add_and_get(self, tmp_path: Path) -> None:
-        registry = Registry(path=tmp_path / "breadforge.toml")
+        registry = Registry(path=tmp_path / "kiln.toml")
         entry = RepoEntry(
             repo="owner/myrepo",
             local_path=tmp_path / "myrepo",
@@ -41,7 +41,7 @@ class TestRegistry:
         assert result.repo == "owner/myrepo"
 
     def test_remove(self, tmp_path: Path) -> None:
-        registry = Registry(path=tmp_path / "breadforge.toml")
+        registry = Registry(path=tmp_path / "kiln.toml")
         entry = RepoEntry(
             repo="owner/myrepo",
             local_path=tmp_path / "myrepo",
@@ -52,11 +52,11 @@ class TestRegistry:
         assert registry.get("owner/myrepo") is None
 
     def test_remove_nonexistent(self, tmp_path: Path) -> None:
-        registry = Registry(path=tmp_path / "breadforge.toml")
+        registry = Registry(path=tmp_path / "kiln.toml")
         assert registry.remove("nobody/nothing") is False
 
     def test_list(self, tmp_path: Path) -> None:
-        registry = Registry(path=tmp_path / "breadforge.toml")
+        registry = Registry(path=tmp_path / "kiln.toml")
         for i in range(3):
             registry.add(
                 RepoEntry(
@@ -68,7 +68,7 @@ class TestRegistry:
         assert len(registry.list()) == 3
 
     def test_persistence(self, tmp_path: Path) -> None:
-        path = tmp_path / "breadforge.toml"
+        path = tmp_path / "kiln.toml"
         registry = Registry(path=path)
         registry.add(
             RepoEntry(
@@ -82,6 +82,6 @@ class TestRegistry:
         assert registry2.get("owner/persisted") is not None
 
     def test_empty_registry(self, tmp_path: Path) -> None:
-        registry = Registry(path=tmp_path / "breadforge.toml")
+        registry = Registry(path=tmp_path / "kiln.toml")
         assert registry.list() == []
         assert registry.get("anyone/anything") is None

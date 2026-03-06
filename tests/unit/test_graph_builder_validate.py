@@ -3,8 +3,8 @@ for the validate/bug handler registration in executor.py make_handlers()."""
 
 from __future__ import annotations
 
-from breadforge.graph.builder import emit_bug_node, emit_validate_node
-from breadforge.graph.executor import make_handlers
+from kiln.graph.builder import emit_bug_node, emit_validate_node
+from kiln.graph.executor import make_handlers
 
 # ---------------------------------------------------------------------------
 # emit_validate_node
@@ -223,7 +223,7 @@ class TestMakeHandlers:
         import importlib
 
         try:
-            importlib.import_module("breadforge.graph.handlers.validate")
+            importlib.import_module("kiln.graph.handlers.validate")
         except ImportError:
             # Handler not yet built — skip this assertion
             return
@@ -236,7 +236,7 @@ class TestMakeHandlers:
         import importlib
 
         try:
-            importlib.import_module("breadforge.graph.handlers.bug")
+            importlib.import_module("kiln.graph.handlers.bug")
         except ImportError:
             return
 

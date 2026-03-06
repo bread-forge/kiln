@@ -1,6 +1,6 @@
 """Unit tests for LLM assessor and allocator."""
 
-from breadforge.assessor import (
+from kiln.assessor import (
     CONFIDENCE_UPGRADE_THRESHOLD,
     Allocator,
     ComplexityEstimate,
@@ -46,7 +46,7 @@ class TestAllocator:
         assert result.upgraded is False
 
     def test_override_skips_estimation(self, monkeypatch) -> None:
-        monkeypatch.setenv("BREADFORGE_MODEL", "custom-model")
+        monkeypatch.setenv("KILN_MODEL", "custom-model")
         allocator = Allocator()
         estimate = ComplexityEstimate(
             tier=ComplexityTier.HIGH,

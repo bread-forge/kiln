@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock, patch
 
-from breadforge.health import CheckResult, CheckStatus, HealthReport, run_health_checks
+from kiln.health import CheckResult, CheckStatus, HealthReport, run_health_checks
 
 
 def _proc(returncode: int = 0, stdout: str = "", stderr: str = "") -> MagicMock:
@@ -126,20 +126,20 @@ class TestRunHealthChecks:
 
     def test_claude_not_found_fails(self) -> None:
         report = self._run(
-            {"ANTHROPIC_API_KEY": "x", "BREADFORGE_GH_TOKEN": "tok"},
+            {"ANTHROPIC_API_KEY": "x", "KILN_GH_TOKEN": "tok"},
             claude=False,
         )
         check = next(c for c in report.checks if c.name == "claude-cli")
         assert check.status == CheckStatus.FAIL
 
     def test_claude_found_passes(self) -> None:
-        report = self._run({"ANTHROPIC_API_KEY": "x", "BREADFORGE_GH_TOKEN": "tok"})
+        report = self._run({"ANTHROPIC_API_KEY": "x", "KILN_GH_TOKEN": "tok"})
         check = next(c for c in report.checks if c.name == "claude-cli")
         assert check.status == CheckStatus.PASS
 
     def test_gh_not_found_fails(self) -> None:
         report = self._run(
-            {"ANTHROPIC_API_KEY": "x", "BREADFORGE_GH_TOKEN": "tok"},
+            {"ANTHROPIC_API_KEY": "x", "KILN_GH_TOKEN": "tok"},
             gh=False,
         )
         check = next(c for c in report.checks if "gh" in c.name)
@@ -147,7 +147,7 @@ class TestRunHealthChecks:
 
     def test_gh_auth_fails(self) -> None:
         report = self._run(
-            {"ANTHROPIC_API_KEY": "x", "BREADFORGE_GH_TOKEN": "tok"},
+            {"ANTHROPIC_API_KEY": "x", "KILN_GH_TOKEN": "tok"},
             gh_auth=False,
         )
         check = next(c for c in report.checks if c.name == "gh-auth")
@@ -155,7 +155,7 @@ class TestRunHealthChecks:
 
     def test_git_not_found_fails(self) -> None:
         report = self._run(
-            {"ANTHROPIC_API_KEY": "x", "BREADFORGE_GH_TOKEN": "tok"},
+            {"ANTHROPIC_API_KEY": "x", "KILN_GH_TOKEN": "tok"},
             git=False,
         )
         check = next(c for c in report.checks if c.name == "git")
@@ -163,24 +163,24 @@ class TestRunHealthChecks:
 
     def test_repo_inaccessible_fails(self) -> None:
         report = self._run(
-            {"ANTHROPIC_API_KEY": "x", "BREADFORGE_GH_TOKEN": "tok"},
+            {"ANTHROPIC_API_KEY": "x", "KILN_GH_TOKEN": "tok"},
             repo_ok=False,
         )
         check = next(c for c in report.checks if c.name == "repo-access")
         assert check.status == CheckStatus.FAIL
 
     def test_anthropic_key_missing_warns(self) -> None:
-        report = self._run({"BREADFORGE_GH_TOKEN": "tok"})
+        report = self._run({"KILN_GH_TOKEN": "tok"})
         check = next(c for c in report.checks if c.name == "anthropic-key")
         assert check.status == CheckStatus.WARN
 
     def test_anthropic_key_set_passes(self) -> None:
-        report = self._run({"ANTHROPIC_API_KEY": "sk-test", "BREADFORGE_GH_TOKEN": "tok"})
+        report = self._run({"ANTHROPIC_API_KEY": "sk-test", "KILN_GH_TOKEN": "tok"})
         check = next(c for c in report.checks if c.name == "anthropic-key")
         assert check.status == CheckStatus.PASS
 
     def test_proxy_secret_missing_warns(self) -> None:
-        report = self._run({"ANTHROPIC_API_KEY": "x", "BREADFORGE_GH_TOKEN": "tok"})
+        report = self._run({"ANTHROPIC_API_KEY": "x", "KILN_GH_TOKEN": "tok"})
         check = next(c for c in report.checks if c.name == "proxy-secret")
         assert check.status == CheckStatus.WARN
 
@@ -188,8 +188,8 @@ class TestRunHealthChecks:
         report = self._run(
             {
                 "ANTHROPIC_API_KEY": "x",
-                "BREADFORGE_GH_TOKEN": "tok",
-                "BREADFORGE_PROXY_SECRET": "secret123",
+                "KILN_GH_TOKEN": "tok",
+                "KILN_PROXY_SECRET": "secret123",
             }
         )
         check = next(c for c in report.checks if c.name == "proxy-secret")
@@ -203,7 +203,7 @@ class TestRunHealthChecks:
 
 class TestNestingGuard:
     def _run_checks(self, extra_env: dict) -> HealthReport:
-        env = {"ANTHROPIC_API_KEY": "x", "BREADFORGE_GH_TOKEN": "tok", **extra_env}
+        env = {"ANTHROPIC_API_KEY": "x", "KILN_GH_TOKEN": "tok", **extra_env}
         with (
             patch("subprocess.run", side_effect=_make_fake_run()),
             patch("shutil.which", return_value="/usr/bin/tool"),
@@ -217,7 +217,7 @@ class TestNestingGuard:
         assert check.status == CheckStatus.PASS
 
     def test_nesting_guard_fail_inside_agent(self) -> None:
-        report = self._run_checks({"BREADFORGE_AGENT": "1"})
+        report = self._run_checks({"KILN_AGENT": "1"})
         check = next(c for c in report.checks if c.name == "nesting-guard")
         assert check.status == CheckStatus.FAIL
         assert "cannot run inside" in check.message
@@ -252,7 +252,7 @@ class TestGhAuthTimeout:
             patch("subprocess.run", side_effect=fake_run),
             patch("shutil.which", return_value="/usr/bin/tool"),
             patch.dict(
-                os.environ, {"BREADFORGE_GH_TOKEN": "tok", "ANTHROPIC_API_KEY": "x"}, clear=True
+                os.environ, {"KILN_GH_TOKEN": "tok", "ANTHROPIC_API_KEY": "x"}, clear=True
             ),
         ):
             report = run_health_checks("owner/repo")
@@ -285,7 +285,7 @@ class TestRepoAccessTimeout:
             patch("subprocess.run", side_effect=fake_run),
             patch("shutil.which", return_value="/usr/bin/tool"),
             patch.dict(
-                os.environ, {"BREADFORGE_GH_TOKEN": "tok", "ANTHROPIC_API_KEY": "x"}, clear=True
+                os.environ, {"KILN_GH_TOKEN": "tok", "ANTHROPIC_API_KEY": "x"}, clear=True
             ),
         ):
             report = run_health_checks("owner/repo")

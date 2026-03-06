@@ -9,15 +9,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from breadforge.beads import BeadStore, GraphNode
-from breadforge.config import Config
-from breadforge.graph.executor import (
+from kiln.beads import BeadStore, GraphNode
+from kiln.config import Config
+from kiln.graph.executor import (
     ExecutionGraph,
     GraphExecutor,
     make_handlers,
 )
-from breadforge.graph.node import BackendRouter, NodeResult
-from breadforge.logger import Logger
+from kiln.graph.node import BackendRouter, NodeResult
+from kiln.logger import Logger
 
 # ---------------------------------------------------------------------------
 # Fixtures

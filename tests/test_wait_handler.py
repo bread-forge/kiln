@@ -5,7 +5,7 @@ is satisfied, then succeeds.  It polls at a configurable interval and gives up
 after max_polls attempts.
 
 This file defines the handler inline (the production handler will live in
-src/breadforge/graph/handlers/wait.py once that module is implemented).
+src/kiln/graph/handlers/wait.py once that module is implemented).
 Tests cover:
   - condition evaluation (always_true, always_false, file_exists)
   - poll counting and timeout semantics
@@ -22,10 +22,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from breadforge.beads.types import GraphNode
-from breadforge.config import Config
-from breadforge.graph.executor import ExecutionGraph, GraphExecutor
-from breadforge.graph.node import NodeResult
+from kiln.beads.types import GraphNode
+from kiln.config import Config
+from kiln.graph.executor import ExecutionGraph, GraphExecutor
+from kiln.graph.node import NodeResult
 
 # ---------------------------------------------------------------------------
 # Minimal WaitHandler — defines the behavioral contract

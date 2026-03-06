@@ -6,7 +6,7 @@ AI providers:
   - build nodes         → Claude (precise tool-use)
 
 This file defines the Backend protocol and BackendRouter used to select the
-correct provider.  Production code will live in src/breadforge/graph/backends.py.
+correct provider.  Production code will live in src/kiln/graph/backends.py.
 
 Contract:
   - Backend.complete(prompt, model, **kwargs) -> str
@@ -21,8 +21,8 @@ from typing import Protocol, runtime_checkable
 
 import pytest
 
-from breadforge.beads.types import GraphNode
-from breadforge.config import Config
+from kiln.beads.types import GraphNode
+from kiln.config import Config
 
 # ---------------------------------------------------------------------------
 # Backend protocol

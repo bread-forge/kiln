@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from breadforge.graph.lock import LockError, OrchestratorLock
+from kiln.graph.lock import LockError, OrchestratorLock
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -48,7 +48,7 @@ class TestOrchestratorLockInit:
     def test_lock_path_location(self, tmp_path: Path) -> None:
         with patch("pathlib.Path.home", return_value=tmp_path):
             lock = OrchestratorLock(owner="org", repo="proj")
-        assert lock._lock_path == tmp_path / ".breadforge" / "locks" / "org-proj.lock"
+        assert lock._lock_path == tmp_path / ".kiln" / "locks" / "org-proj.lock"
 
     def test_lock_file_initially_none(self) -> None:
         lock = OrchestratorLock(owner="x", repo="y")
@@ -57,7 +57,7 @@ class TestOrchestratorLockInit:
 
 class TestOrchestratorLockAcquire:
     def test_enter_creates_lock_dir(self, tmp_path: Path) -> None:
-        lock_dir = tmp_path / ".breadforge" / "locks"
+        lock_dir = tmp_path / ".kiln" / "locks"
         assert not lock_dir.exists()
         with patch("pathlib.Path.home", return_value=tmp_path):
             lock = OrchestratorLock(owner="a", repo="b")
@@ -124,7 +124,7 @@ class TestOrchestratorLockBlocking:
                 lock2.__enter__()
             assert exc_info.value.code == 1
             captured = capsys.readouterr()
-            assert "another breadforge run is active for myrepo" in captured.out
+            assert "another kiln run is active for myrepo" in captured.out
 
     def test_blocked_lock_file_is_closed(self, tmp_path: Path) -> None:
         """On blocking, the file opened for locking is closed (no leak)."""
