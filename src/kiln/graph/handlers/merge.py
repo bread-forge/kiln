@@ -231,8 +231,9 @@ Fix only what CI is complaining about. Do not refactor or expand scope."""
         workspace = Path(tempfile.mkdtemp(prefix=f"kiln-repair-{pr_number}-"))
         result = await run_agent(
             prompt,
-            model=config.model,
+            model="claude-haiku-4-5-20251001",
             timeout_minutes=20,
+            max_turns=20,
             cwd=workspace,
             allowed_tools=["Bash", "Edit", "Write", "Read", "Glob", "Grep", "MultiEdit"],
         )
@@ -285,8 +286,9 @@ You must preserve all intentional changes from the PR. Do not discard any featur
         workspace = Path(tempfile.mkdtemp(prefix=f"kiln-conflict-{pr_number}-"))
         result = await run_agent(
             prompt,
-            model=config.model,
+            model="claude-haiku-4-5-20251001",
             timeout_minutes=30,
+            max_turns=20,
             cwd=workspace,
             allowed_tools=["Bash", "Edit", "Write", "Read", "Glob", "Grep", "MultiEdit"],
         )
@@ -332,8 +334,9 @@ Address every comment. Do not ignore any reviewer feedback."""
         workspace = Path(tempfile.mkdtemp(prefix=f"kiln-review-{pr_number}-"))
         result = await run_agent(
             prompt,
-            model=config.model,
+            model="claude-haiku-4-5-20251001",
             timeout_minutes=25,
+            max_turns=20,
             cwd=workspace,
             allowed_tools=["Bash", "Edit", "Write", "Read", "Glob", "Grep", "MultiEdit"],
         )

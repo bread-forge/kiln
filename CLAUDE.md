@@ -46,18 +46,19 @@ New types follow the same `NodeHandler` protocol (`execute` + `recover`).
 | `consensus` | `graph/handlers/consensus.py` | Run n voters concurrently; decide by majority |
 | `design_doc` | `graph/handlers/design_doc.py` | Generate a design document from a plan artifact |
 
-## Backend Abstraction (v0.2.0)
+## Model Selection
 
-Research and plan nodes are routed to cost-effective, web-search-capable models
-(Gemini, GPT-4.1) via `BackendRouter`.  Build nodes stay on Claude.
+All nodes use Anthropic by default. `BackendRouter` exists as optional infrastructure
+but is not wired in production — `config.model` (Sonnet) is used directly.
 
-| Node type | Default backend | Default model |
-|-----------|----------------|---------------|
-| `research` | Gemini | `gemini-2.5-pro` |
-| `plan` | OpenAI | `gpt-4.1` |
-| `build` | Anthropic | `claude-sonnet-4-6` |
-| `merge` | Anthropic | `claude-sonnet-4-6` |
-| `readme` | Anthropic | `claude-sonnet-4-6` |
+| Node type | Model | Notes |
+|-----------|-------|-------|
+| `plan` | `claude-sonnet-4-6` | LLM API call (not a claude-cli subprocess) |
+| `build` | `claude-sonnet-4-6` | claude-cli subprocess, 50-turn cap |
+| `merge` | `claude-sonnet-4-6` | merge/CI polling only; no subprocess |
+| `merge` sub-agents | `claude-haiku-4-5-20251001` | repair/conflict/review — mechanical tasks |
+| `readme` | `claude-sonnet-4-6` | claude-cli subprocess |
+| `research` | `claude-haiku-4-5-20251001` | web search only |
 
 ## Credential Proxy (v0.2.0)
 

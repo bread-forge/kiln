@@ -139,6 +139,7 @@ async def _run_agent_once(
     allowed_tools: list[str] | None,
     proxy_url: str | None,
     proxy_token: str | None,
+    max_turns: int | None = None,
 ) -> RunResult:
     """Internal helper: run one Claude Code subprocess and return a RunResult."""
     start = datetime.now(UTC)
@@ -154,6 +155,9 @@ async def _run_agent_once(
         "--print",
         prompt,
     ]
+
+    if max_turns is not None:
+        cmd += ["--max-turns", str(max_turns)]
 
     if allowed_tools:
         cmd += ["--allowedTools", ",".join(allowed_tools)]
@@ -251,6 +255,7 @@ async def run_agent(
     *,
     model: str = "claude-sonnet-4-6",
     timeout_minutes: int = 60,
+    max_turns: int | None = 50,
     cwd: Path | None = None,
     allowed_tools: list[str] | None = None,
     proxy_url: str | None = None,
@@ -258,6 +263,9 @@ async def run_agent(
     fallback_model: str | None = "claude-haiku-4-5-20251001",
 ) -> RunResult:
     """Spawn a headless Claude Code agent and wait for completion.
+
+    *max_turns* caps the number of agentic turns to prevent runaway cost on
+    stuck agents.  Defaults to 50; pass None to disable.
 
     When *proxy_url* and *proxy_token* are provided the subprocess routes its
     Anthropic API requests through the loopback credential proxy rather than
@@ -274,6 +282,7 @@ async def run_agent(
         allowed_tools=allowed_tools,
         proxy_url=proxy_url,
         proxy_token=proxy_token,
+        max_turns=max_turns,
     )
 
     if fallback_model and result.error_type in {"rate_limit", "overload"}:
@@ -286,6 +295,7 @@ async def run_agent(
             allowed_tools=allowed_tools,
             proxy_url=proxy_url,
             proxy_token=proxy_token,
+            max_turns=max_turns,
         )
 
     return result

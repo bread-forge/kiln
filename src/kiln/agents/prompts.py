@@ -63,7 +63,7 @@ Do not modify pyproject.toml, CLAUDE.md, or README.md unless they are on the lis
    git push -u origin {branch}
    ```"""
 
-    standards = _load_standards("issues", "code", "tests", "commits", "prs")
+    standards = _load_standards("code", "tests", "commits", "prs")
     standards_block = (
         f"\n\n---\n\n## kiln Agent Standards\n\n{standards}\n\n---\n" if standards else ""
     )
