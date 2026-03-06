@@ -139,7 +139,13 @@ def _setup_workspace(
     if allowed_files:
         # Write allowed-files manifest before the first push so the scope file is
         # present on the remote branch from the start — agents never need to add it.
-        (workspace / ".kiln-scope").write_text("\n".join(allowed_files) + "\n")
+        # Strip the "<owner>/<repo>/" prefix if present — the pre-commit hook
+        # compares against paths relative to the repo root, not absolute paths.
+        _prefix = repo.rstrip("/") + "/"
+        scope_paths = [
+            f[len(_prefix):] if f.startswith(_prefix) else f for f in allowed_files
+        ]
+        (workspace / ".kiln-scope").write_text("\n".join(scope_paths) + "\n")
 
         # Install pre-commit hook
         hook_path = workspace / ".git" / "hooks" / "pre-commit"
@@ -181,7 +187,11 @@ def _verify_pr_scope(pr_number: int, repo: str, allowed_files: list[str]) -> lis
         changed = {f["path"] for f in data.get("files", [])}
     except (json.JSONDecodeError, KeyError):
         return []
-    allowed = set(allowed_files) | {".kiln-scope"}
+    # Strip "<owner>/<repo>/" prefix from allowed_files if present — PR file paths
+    # are relative to the repo root, but allowed_files may carry the full prefix.
+    _prefix = repo.rstrip("/") + "/"
+    allowed = {f[len(_prefix):] if f.startswith(_prefix) else f for f in allowed_files}
+    allowed.add(".kiln-scope")
     return sorted(changed - allowed)
 
 
