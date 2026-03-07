@@ -142,9 +142,7 @@ def _setup_workspace(
         # Strip the "<owner>/<repo>/" prefix if present — the pre-commit hook
         # compares against paths relative to the repo root, not absolute paths.
         _prefix = repo.rstrip("/") + "/"
-        scope_paths = [
-            f[len(_prefix):] if f.startswith(_prefix) else f for f in allowed_files
-        ]
+        scope_paths = [f[len(_prefix) :] if f.startswith(_prefix) else f for f in allowed_files]
         (workspace / ".kiln-scope").write_text("\n".join(scope_paths) + "\n")
 
         # Install pre-commit hook
@@ -190,7 +188,7 @@ def _verify_pr_scope(pr_number: int, repo: str, allowed_files: list[str]) -> lis
     # Strip "<owner>/<repo>/" prefix from allowed_files if present — PR file paths
     # are relative to the repo root, but allowed_files may carry the full prefix.
     _prefix = repo.rstrip("/") + "/"
-    allowed = {f[len(_prefix):] if f.startswith(_prefix) else f for f in allowed_files}
+    allowed = {f[len(_prefix) :] if f.startswith(_prefix) else f for f in allowed_files}
     allowed.add(".kiln-scope")
     return sorted(changed - allowed)
 
@@ -262,13 +260,20 @@ class BuildHandler:
                 _unclaim_issue(repo, issue_number)
             return NodeResult(success=False, error=f"workspace setup: {setup_error}")
 
+        # Strip "<owner>/<repo>/" prefix from file paths before embedding in the prompt.
+        # Plan nodes produce fully-qualified paths; agents must work with repo-relative paths.
+        _prefix = repo.rstrip("/") + "/"
+        prompt_scope = (
+            [f[len(_prefix) :] if f.startswith(_prefix) else f for f in files] if files else None
+        )
+
         prompt = build_agent_prompt(
             issue_number=issue_number or 0,
             issue_title=issue_title,
             issue_body=issue_body,
             branch=branch,
             repo=repo,
-            allowed_scope=files or None,
+            allowed_scope=prompt_scope,
             workspace_ready=True,
         )
 
