@@ -39,7 +39,7 @@ class ReadmeHandler:
     async def execute(self, node: GraphNode, config: Config) -> NodeResult:
         repo = config.repo
         milestone = node.context.get("milestone", "")
-        plan_artifact = node.context.get("plan_artifact", {})
+        plan_artifact = self._load_plan_artifact(node)
 
         prompt = readme_agent_prompt(repo, milestone, plan_artifact)
         workspace = Path(tempfile.mkdtemp(prefix=f"kiln-readme-{milestone}-"))
@@ -89,6 +89,18 @@ class ReadmeHandler:
                     self._store.write_work_bead(bead)
 
         return NodeResult(success=True, output={"readme": True, "repo": repo})
+
+    def _load_plan_artifact(self, node: GraphNode) -> dict:
+        """Load plan artifact from the plan node's bead output."""
+        plan_node_id = node.context.get("plan_node_id")
+        if plan_node_id and self._store:
+            try:
+                plan_node = self._store.read_node(plan_node_id)
+                if plan_node and plan_node.output:
+                    return plan_node.output.get("artifact", {})
+            except Exception:
+                pass
+        return {}
 
     def recover(self, node: GraphNode, config: Config) -> NodeResult | None:
         """Readme nodes have no recoverable state — always re-dispatch."""

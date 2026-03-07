@@ -1,0 +1,96 @@
+<mxfile>
+  <diagram name="System Overview" id="kiln-overview">
+    <mxGraphModel dx="1326" dy="791" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="900" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="spec" value="spec.md" style="shape=document;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="305" y="30" width="120" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="preflight" value="/preflight&lt;br&gt;(kiln preflight)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="285" y="140" width="160" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="decision" value="score?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="310" y="235" width="110" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- CC path -->
+        <mxCell id="proof" value="proof run&lt;br&gt;(research agent)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="55" y="375" width="150" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="findings" value="findings&lt;br&gt;(context for CC)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#000000;fontSize=12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="55" y="475" width="150" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="cc_session" value="Claude Code&lt;br&gt;session" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="55" y="575" width="150" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- kiln path -->
+        <mxCell id="kiln_run" value="kiln run&lt;br&gt;--dry-run confirm" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="530" y="375" width="160" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="executor" value="GraphExecutor&lt;br&gt;(rolling dispatcher)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="530" y="475" width="160" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="github" value="GitHub&lt;br&gt;issues / PRs / CI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="530" y="575" width="160" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- shared BeadStore — both paths write here -->
+        <mxCell id="beads" value="BeadStore&lt;br&gt;~/.kiln/beads/" style="shape=cylinder3;whiteSpace=wrap;html=1;size=15;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="285" y="680" width="160" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- spec → preflight -->
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#000000;" edge="1" source="spec" target="preflight" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- preflight → decision -->
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#000000;" edge="1" source="preflight" target="decision" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- preflight → beads (routing bead on every run) -->
+        <mxCell id="e_pb" value="routing bead" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;fontColor=#666666;fontSize=10;dashed=1;" edge="1" source="preflight" target="beads" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- decision → CC path -->
+        <mxCell id="e3" value="score &gt; 4 (CC)" style="edgeStyle=orthogonalEdgeStyle;exitX=0;exitY=0.5;strokeColor=#d6b656;fontColor=#666666;fontSize=11;" edge="1" source="decision" target="proof" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- decision → kiln path -->
+        <mxCell id="e4" value="score &lt;= 4 (kiln)" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.5;strokeColor=#82b366;fontColor=#666666;fontSize=11;" edge="1" source="decision" target="kiln_run" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- CC chain -->
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d6b656;" edge="1" source="proof" target="findings" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="context" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9673a6;fontColor=#666666;fontSize=11;" edge="1" source="findings" target="cc_session" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- findings → beads (research bead on CC path) -->
+        <mxCell id="e_fb" value="research bead" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d6b656;fontColor=#666666;fontSize=10;dashed=1;" edge="1" source="findings" target="beads" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- kiln chain -->
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;" edge="1" source="kiln_run" target="executor" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;" edge="1" source="executor" target="github" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <!-- executor → beads (node state beads on kiln path) -->
+        <mxCell id="e_eb" value="node state beads" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;fontColor=#666666;fontSize=10;" edge="1" source="executor" target="beads" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

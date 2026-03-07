@@ -39,6 +39,10 @@ class Config:
     research_model: str | None = None
     plan_model: str | None = None
 
+    # Maximum number of research rounds before hard-failing on low confidence.
+    # Round 0 = initial plan; round 1 = first research pass; round 2 = second research pass.
+    max_research_rounds: int = 2
+
     @classmethod
     def from_env(cls, repo: str) -> Config:
         return cls(
@@ -59,6 +63,7 @@ class Config:
             plan_backend=os.environ.get("KILN_PLAN_BACKEND", "anthropic"),
             research_model=os.environ.get("KILN_RESEARCH_MODEL") or None,
             plan_model=os.environ.get("KILN_PLAN_MODEL") or None,
+            max_research_rounds=int(os.environ.get("KILN_MAX_RESEARCH_ROUNDS", "2")),
         )
 
 

@@ -111,12 +111,19 @@ class TestResearchPrompt:
         assert "{repo}" in RESEARCH_PROMPT
         assert "{milestone}" in RESEARCH_PROMPT
         assert "{unknowns}" in RESEARCH_PROMPT
+        assert "{sibling_groups_block}" in RESEARCH_PROMPT
+        assert "{prior_findings_block}" in RESEARCH_PROMPT
+        assert "{repo_clone_instruction}" in RESEARCH_PROMPT
 
     def test_formattable(self) -> None:
         result = RESEARCH_PROMPT.format(
             repo="owner/repo",
             milestone="v1.0",
             unknowns="- Which library?",
+            research_group="general",
+            sibling_groups_block="",
+            prior_findings_block="",
+            repo_clone_instruction="Clone the repo: `gh repo clone owner/repo /tmp/owner_repo`",
         )
         assert "owner/repo" in result
         assert "v1.0" in result
@@ -133,12 +140,14 @@ class TestPlanPrompt:
         assert "{spec_text}" in PLAN_PROMPT
         assert "{codebase_context}" in PLAN_PROMPT
         assert "{research_findings}" in PLAN_PROMPT
+        assert "{prior_plan}" in PLAN_PROMPT
 
     def test_formattable(self) -> None:
         result = PLAN_PROMPT.format(
             spec_text="# My spec",
             codebase_context="Some context",
             research_findings="No findings",
+            prior_plan="",
         )
         assert "# My spec" in result
 

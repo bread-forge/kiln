@@ -92,8 +92,27 @@ class TestExecutionGraph:
         ready = graph.get_ready()
         assert [n.id for n in ready] == ["b"]
 
-    def test_get_ready_dep_abandoned_unblocks(self) -> None:
-        a = make_node("a")
+    def test_get_ready_dep_abandoned_blocks_non_gate(self) -> None:
+        """Abandoned non-gate deps block downstream nodes."""
+        a = make_node("a")  # default type="build", non-gate
+        b = make_node("b", depends_on=["a"])
+        graph = ExecutionGraph([a, b])
+        graph.get_node("a").state = "abandoned"  # type: ignore[union-attr]
+        ready = graph.get_ready()
+        assert [n.id for n in ready] == []
+
+    def test_get_ready_dep_abandoned_gate_unblocks(self) -> None:
+        """Abandoned gate-type deps do not block downstream nodes."""
+        a = make_node("a", type="wait")
+        b = make_node("b", depends_on=["a"])
+        graph = ExecutionGraph([a, b])
+        graph.get_node("a").state = "abandoned"  # type: ignore[union-attr]
+        ready = graph.get_ready()
+        assert [n.id for n in ready] == ["b"]
+
+    def test_get_ready_dep_abandoned_research_unblocks(self) -> None:
+        """Abandoned research nodes (gate type) do not block plan/refine nodes."""
+        a = make_node("a", type="research")
         b = make_node("b", depends_on=["a"])
         graph = ExecutionGraph([a, b])
         graph.get_node("a").state = "abandoned"  # type: ignore[union-attr]
@@ -418,8 +437,10 @@ class TestGraphExecutor:
         assert merge_handler.execute.call_count == 0
         assert readme_handler.execute.call_count == 0
 
-    def test_auto_abandon_skipped_when_any_dep_done(self, config: Config) -> None:
-        """Node with mixed deps (some done, some abandoned) still runs."""
+    def test_auto_abandon_cascades_when_any_non_gate_dep_abandoned(
+        self, config: Config
+    ) -> None:
+        """Node with any non-gate abandoned dep is itself auto-abandoned, even if other deps succeeded."""
         build_a_done = make_node("build-a")
         build_b_fail = make_node("build-b", max_retries=1)
         readme = make_node("readme", type="readme", depends_on=["build-a", "build-b"])
@@ -447,8 +468,36 @@ class TestGraphExecutor:
 
         assert "build-a" in result.done
         assert "build-b" in result.abandoned
-        assert "readme" in result.done  # ran because build-a succeeded
-        assert readme_handler.execute.call_count == 1
+        assert "readme" in result.abandoned  # blocked: build-b (non-gate) was abandoned
+        assert readme_handler.execute.call_count == 0
+
+    def test_gate_dep_abandoned_does_not_cascade(self, config: Config) -> None:
+        """A node whose only abandoned dep is a gate type still runs."""
+        research = make_node("research-a", type="research", max_retries=1)
+        plan = make_node("plan-refine", type="plan", depends_on=["research-a"])
+
+        async def execute(node, cfg):
+            if node.id == "research-a":
+                return NodeResult(success=False, error="crashed")
+            return NodeResult(success=True)
+
+        from unittest.mock import MagicMock
+
+        handler = MagicMock()
+        handler.execute = execute
+        handler.recover = MagicMock(return_value=None)
+
+        executor = GraphExecutor(
+            config=config,
+            handlers={"research": handler, "plan": handler},
+            concurrency=2,
+            watchdog_interval=0.1,
+        )
+        graph = ExecutionGraph([research, plan])
+        result = asyncio.run(executor.run(graph))
+
+        assert "research-a" in result.abandoned
+        assert "plan-refine" in result.done  # gate dep abandoned → plan still ran
 
     def test_auto_abandon_node_without_deps_not_affected(self, config: Config) -> None:
         """Nodes with no dependencies are never auto-abandoned."""

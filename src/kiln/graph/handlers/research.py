@@ -16,6 +16,7 @@ Findings are stored as markdown in the bead store under the node ID.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from beads.types import GraphNode
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
     from kiln.logger import Logger
 
 RESEARCH_TIMEOUT_MINUTES = 15
-RESEARCH_ALLOWED_TOOLS = ["WebSearch", "WebFetch"]
+RESEARCH_ALLOWED_TOOLS = ["WebSearch", "WebFetch", "Bash", "Glob", "Grep", "Read"]
 
 
 class ResearchHandler:
@@ -53,15 +54,55 @@ class ResearchHandler:
         repo = config.repo
         milestone = node.context.get("milestone", "")
         unknowns: list[str] = node.context.get("unknowns", [])
+        research_group: str = node.context.get("research_group", "general")
 
         if not unknowns:
             return NodeResult(success=True, output={"findings": "", "node_id": node.id})
 
         unknowns_text = "\n".join(f"- {u}" for u in unknowns)
+
+        # Build contextual prompt blocks from node context
+        prior_findings: str = node.context.get("prior_findings", "")
+        sibling_groups: list[str] = node.context.get("sibling_groups", [])
+        repo_local_path: str = node.context.get("repo_local_path", "")
+
+        if prior_findings:
+            prior_findings_block = (
+                "## Prior Research Findings (from previous round — extend, correct, or confirm)\n\n"
+                + prior_findings
+                + "\n\n---\n\n"
+            )
+        else:
+            prior_findings_block = ""
+
+        if sibling_groups:
+            sibling_list = "\n".join(f"- {g}" for g in sibling_groups)
+            sibling_groups_block = (
+                "Sibling research groups (covered by parallel agents — do not duplicate their scope):\n"
+                + sibling_list
+            )
+        else:
+            sibling_groups_block = ""
+
+        if repo_local_path:
+            repo_clone_instruction = (
+                f"The repo is already cloned at `{repo_local_path}`. "
+                "Use this path directly — do NOT run `gh repo clone` or `git clone`."
+            )
+        else:
+            safe_name = repo.replace("/", "_")
+            repo_clone_instruction = (
+                f"Clone the repo: `gh repo clone {repo} /tmp/{safe_name}` then cd into it."
+            )
+
         prompt = RESEARCH_PROMPT.format(
             repo=repo,
             milestone=milestone,
             unknowns=unknowns_text,
+            research_group=research_group,
+            sibling_groups_block=sibling_groups_block,
+            prior_findings_block=prior_findings_block,
+            repo_clone_instruction=repo_clone_instruction,
         )
 
         if config.research_backend != "anthropic":
@@ -85,7 +126,8 @@ class ResearchHandler:
                     success=False,
                     error=f"research agent failed (exit {result.exit_code})",
                 )
-            findings = result.stdout.strip()
+            result_event = result.find_event("result")
+            findings = (result_event.get("result", "") if result_event else result.stdout).strip()
             agent_cost = result.cost_usd
 
         if self._store:
@@ -98,7 +140,12 @@ class ResearchHandler:
                 milestone=milestone,
             )
 
+        m = re.search(r"[Oo]verall\s+confidence[^:]*:\s*([\d.]+)", findings)
+        confidence = float(m.group(1)) if m else None
+
         out: dict = {"findings": findings, "node_id": node.id}
+        if confidence is not None:
+            out["confidence"] = confidence
         if agent_cost is not None:
             out["cost_usd"] = agent_cost
         return NodeResult(success=True, output=out)

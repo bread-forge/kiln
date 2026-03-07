@@ -226,7 +226,14 @@ Steps:
 7. `git push origin {branch}`
 8. STOP — do not merge, do not open a new PR
 
-Fix only what CI is complaining about. Do not refactor or expand scope."""
+Fix only what CI is complaining about. Do not refactor or expand scope.
+
+IMPORTANT — DO NOT modify `.github/workflows/ci.yml`:
+The CI workflow clones private sibling repos (`breadmin-llm`, `breadmin-shared`) using
+`BREADMIN_PAT` (not `GITHUB_TOKEN`). `GITHUB_TOKEN` is scoped to this repo only and
+cannot access private sibling repos — changing it will break CI. If the failure is
+in the "Clone sibling deps" step, the cause is something else (e.g. missing secret,
+network issue) — do not change the auth token variable name."""
 
         workspace = Path(tempfile.mkdtemp(prefix=f"kiln-repair-{pr_number}-"))
         result = await run_agent(

@@ -431,6 +431,45 @@ class TestRetryRecovery:
         assert handler.execute.call_count == 1
         assert handler.recover.call_count >= 1
 
+    def test_handler_recover_at_max_retries_success(self, config: Config) -> None:
+        """If a node exhausts all retries but handler.recover() finds success, mark done."""
+        recovery = NodeResult(success=True, output={"pr": 51})
+        handler = AsyncMock()
+        handler.execute = AsyncMock(return_value=NodeResult(success=False, error="no PR found"))
+        handler.recover = MagicMock(return_value=recovery)
+
+        executor = GraphExecutor(
+            config=config,
+            handlers={"build": handler},
+            concurrency=1,
+            watchdog_interval=0.1,
+        )
+        node = make_node("build-a", max_retries=1)
+        graph = ExecutionGraph([node])
+        result = asyncio.run(executor.run(graph))
+        assert "build-a" in result.done
+        assert "build-a" not in result.abandoned
+
+    def test_handler_recover_at_max_retries_failure_still_abandons(
+        self, config: Config
+    ) -> None:
+        """If a node exhausts all retries and recover() returns None, it is abandoned."""
+        handler = AsyncMock()
+        handler.execute = AsyncMock(return_value=NodeResult(success=False, error="no PR found"))
+        handler.recover = MagicMock(return_value=None)
+
+        executor = GraphExecutor(
+            config=config,
+            handlers={"build": handler},
+            concurrency=1,
+            watchdog_interval=0.1,
+        )
+        node = make_node("build-a", max_retries=1)
+        graph = ExecutionGraph([node])
+        result = asyncio.run(executor.run(graph))
+        assert "build-a" in result.abandoned
+        assert "build-a" not in result.done
+
 
 # ---------------------------------------------------------------------------
 # Task exception handling
