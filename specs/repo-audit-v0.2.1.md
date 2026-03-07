@@ -38,7 +38,7 @@ directory for human review before being given to kiln.
 ## Validation
 
 ```bash
-cd bread-forge/repo-audit
+
 
 # SpecGen produces at least 1 spec from kiln findings
 uv run repo-audit specgen ../kiln --out-dir /tmp/generated-specs --dry-run

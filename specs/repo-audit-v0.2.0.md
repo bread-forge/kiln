@@ -38,7 +38,7 @@ batch enrichment.
 ## Validation
 
 ```bash
-cd bread-forge/repo-audit
+
 
 # Enrichment adds required fields (requires ANTHROPIC_API_KEY)
 uv run repo-audit run ../kiln --enrich

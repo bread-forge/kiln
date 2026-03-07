@@ -40,7 +40,7 @@ Security findings and self-modification always remain `review-all`.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Trust escalation eligibility check
 uv run python -c "

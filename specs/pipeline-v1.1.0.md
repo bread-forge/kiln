@@ -37,7 +37,7 @@ to support the `medium` severity tier after demonstrating sufficient `low` tier 
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Dashboard launches (smoke test)
 timeout 3 uv run pipeline dashboard || true

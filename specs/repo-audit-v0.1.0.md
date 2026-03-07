@@ -41,7 +41,7 @@ Uses `beads` for persistent finding storage. The comparator and verdict layers c
 ## Validation
 
 ```bash
-cd bread-forge/repo-audit
+
 
 # Collector harvests kiln artifacts
 uv run repo-audit collect ../kiln --output /tmp/artifacts.json

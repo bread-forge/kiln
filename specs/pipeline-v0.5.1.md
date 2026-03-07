@@ -42,7 +42,7 @@ MergeHandler polls before merging — blocking merge on verification failure.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # QE verifier runs assertions from a spec
 uv run python -c "

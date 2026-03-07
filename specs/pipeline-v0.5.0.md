@@ -40,7 +40,7 @@ events. This milestone: dispatch only. Verification comes in v0.5.1.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Dispatch runs kiln (dry-run to avoid real LLM calls)
 uv run pipeline run --repo bread-forge/kiln --gate-mode review-all

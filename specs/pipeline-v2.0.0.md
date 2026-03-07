@@ -44,7 +44,7 @@ diagnostic reports. Configuration patches (v2.1.0) come next.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Meta-analyze runs (returns InsufficientData on fresh install)
 uv run pipeline meta-analyze --repo bread-forge/kiln

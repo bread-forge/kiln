@@ -35,7 +35,7 @@ mode the rollback policy determines automatic revert eligibility.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Rollback spec generated from failed verdict
 uv run python -c "

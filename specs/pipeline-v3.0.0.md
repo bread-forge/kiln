@@ -40,7 +40,7 @@ threshold). These are the safety rails that make full-auto trustworthy.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Kill switch halts new dispatches
 uv run pipeline halt

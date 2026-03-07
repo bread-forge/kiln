@@ -37,7 +37,7 @@ ready for 10+ validation cycles.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Budget cap stops agent dispatch
 uv run pipeline run --repo bread-forge/kiln --max-analysis-cost 0.001 2>&1 | grep -i "budget\|exceeded"

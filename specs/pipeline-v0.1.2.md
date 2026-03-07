@@ -43,7 +43,7 @@ time per proposal.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Gate launches (smoke test — exits after 2s in headless mode)
 timeout 5 uv run pipeline gate --repo bread-forge/kiln --headless-test || true

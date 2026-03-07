@@ -40,7 +40,7 @@ a calibration record.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Patch generation from drift alerts
 uv run python -c "

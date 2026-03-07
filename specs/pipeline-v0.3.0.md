@@ -38,7 +38,7 @@ measured against actual kiln plan node counts.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # PE produces valid assessment
 uv run python -c "

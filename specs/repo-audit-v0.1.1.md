@@ -39,7 +39,7 @@ confidence, and evidence chains. Adds `repo-audit list` to show findings and
 ## Validation
 
 ```bash
-cd bread-forge/repo-audit
+
 
 # Full run produces findings
 uv run repo-audit run ../kiln

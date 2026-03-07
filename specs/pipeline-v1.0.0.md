@@ -37,7 +37,7 @@ enabled. >90% agreement required.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Policy engine approves low-severity doc change
 uv run python -c "

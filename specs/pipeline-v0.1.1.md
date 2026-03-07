@@ -44,7 +44,7 @@ via BeadStore.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Full run dispatches repo-audit and collects findings
 uv run pipeline run --repo bread-forge/kiln --agents repo-audit

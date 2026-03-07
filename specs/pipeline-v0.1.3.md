@@ -33,7 +33,7 @@ the gate fills with the same proposals every cycle.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Reject creates suppression record
 uv run pipeline gate --repo bread-forge/kiln --headless-test --auto-reject-first

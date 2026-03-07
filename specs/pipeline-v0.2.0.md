@@ -36,7 +36,7 @@ gate now shows QE-generated validation sections prominently.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # QE enriches a spec with Validation section
 uv run python -c "

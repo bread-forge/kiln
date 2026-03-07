@@ -44,7 +44,7 @@ synthesis agents, no dispatch yet — just the engine that will coordinate every
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # Start a cycle
 CYCLE_ID=$(uv run pipeline cycle start --repo bread-forge/kiln)

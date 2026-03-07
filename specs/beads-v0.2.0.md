@@ -45,7 +45,7 @@ co-located and pydantic-validated across the ecosystem.
 ## Validation
 
 ```bash
-cd bread-forge/beads
+
 
 # All new types instantiate and round-trip through JSON
 uv run python -c "

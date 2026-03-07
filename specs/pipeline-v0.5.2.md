@@ -43,7 +43,7 @@ from v0.5.1, these three agents form the complete verification tier.
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # PE verifier runs against kiln
 uv run python -c "

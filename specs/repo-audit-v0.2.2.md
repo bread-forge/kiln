@@ -38,7 +38,7 @@ are not installed.
 ## Validation
 
 ```bash
-cd bread-forge/repo-audit
+
 
 # Security scan runs (tools may not be installed — graceful skip)
 uv run repo-audit security-scan ../kiln 2>&1

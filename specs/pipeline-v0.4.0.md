@@ -35,7 +35,7 @@ product prioritization. The gate queue is now clean, ordered, and suppression-fi
 ## Validation
 
 ```bash
-cd bread-forge/pipeline
+
 
 # PM deduplicates suppressed finding
 uv run python -c "
