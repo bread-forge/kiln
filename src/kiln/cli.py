@@ -1147,15 +1147,19 @@ def preflight(
     repo: Annotated[str | None, typer.Option(help="owner/repo for codebase context.")] = None,
     repo_path: Annotated[str | None, typer.Option(help="Local path to repo checkout.")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
+    with_proof: Annotated[bool, typer.Option("--proof", help="Run proof research before scoring.")] = False,
 ) -> None:
     """Decide whether a spec should run in Claude Code (CC) or kiln (autonomous batch).
 
     Scores the spec on four signals — volume, novelty, ambiguity, cross_cutting —
     and recommends a route. No side effects; does not start any work.
+
+    With --proof: extracts unknowns, runs parallel web research, then re-scores
+    with findings as context. Produces a more accurate signal on novelty and ambiguity.
     """
     import asyncio as _asyncio
 
-    from kiln.preflight import run_preflight
+    from kiln.preflight import run_preflight, run_preflight_with_proof
 
     if not spec.exists():
         console.print(f"[red]error:[/red] spec not found: {spec}")
@@ -1176,13 +1180,33 @@ def preflight(
                 local_path = str(candidate)
                 break
 
-    result = _asyncio.run(run_preflight(spec_text, local_path))
+    fast_result = None
+    if with_proof:
+        console.print("[dim]Running fast preflight...[/dim]", stderr=True)
+        import contextlib
+
+        store_for_proof = None
+        if repo:
+            with contextlib.suppress(Exception):
+                store_for_proof = _get_store(Config.from_env(repo))
+        fast_result, refined = _asyncio.run(
+            run_preflight_with_proof(spec_text, local_path, repo=repo or "", store=store_for_proof)
+        )
+        if refined is not None:
+            console.print("[dim]Proof complete — re-scoring with research context.[/dim]", stderr=True)
+            result = refined
+        else:
+            console.print("[dim]No unknowns found — using fast score.[/dim]", stderr=True)
+            result = fast_result
+    else:
+        result = _asyncio.run(run_preflight(spec_text, local_path))
 
     # Write preflight bead and fire hook (best-effort, non-fatal).
     if repo:
         try:
-            import uuid
-            from kiln.hooks import fire
+            import uuid  # noqa: PLC0415
+
+            from kiln.hooks import fire  # noqa: PLC0415
 
             config = Config.from_env(repo)
             store = _get_store(config)
@@ -1211,7 +1235,6 @@ def preflight(
             pass
 
     if json_output:
-        import dataclasses
         console.print(json.dumps({
             "route": result.route,
             "total": result.total,
@@ -1228,7 +1251,10 @@ def preflight(
 
     route_color = "green" if result.route == "kiln" else "yellow"
     route_label = "kiln (autonomous batch)" if result.route == "kiln" else "Claude Code (interactive)"
-    console.print(f"\nRoute: [{route_color}]{route_label}[/{route_color}]  (score {result.total}/8, confidence {result.confidence:.0%})\n")
+    proof_tag = " [dim](proof-informed)[/dim]" if fast_result is not None else ""
+    console.print(f"\nRoute: [{route_color}]{route_label}[/{route_color}]  (score {result.total}/8, confidence {result.confidence:.0%}){proof_tag}\n")
+    if fast_result is not None and fast_result.total != result.total:
+        console.print(f"  [dim]Fast score: {fast_result.total}/8 → refined: {result.total}/8[/dim]\n")
 
     signal_rows = [
         ("volume",        result.volume),

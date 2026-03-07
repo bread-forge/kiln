@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Literal
 
 
@@ -29,7 +28,7 @@ Spec:
 
 Codebase context:
 {codebase_context}
-
+{research_block}
 ---
 
 Score each signal from 0 to 2. Output ONLY valid JSON — no markdown fences, no prose.
@@ -96,15 +95,26 @@ class PreflightResult:
 async def run_preflight(
     spec_text: str,
     repo_local_path: str | None = None,
+    research_findings: str = "",
 ) -> PreflightResult:
     """Score the spec and return a routing recommendation."""
     from kiln.graph.handlers.plan import _read_codebase_summary
 
     codebase_ctx = _read_codebase_summary(repo_local_path)
 
+    if research_findings:
+        research_block = (
+            "\nResearch findings (use these to inform novelty and ambiguity scores):\n"
+            + research_findings[:8000]
+            + "\n"
+        )
+    else:
+        research_block = ""
+
     prompt = _PROMPT.format(
         spec_text=spec_text[:6000],
         codebase_context=codebase_ctx[:8000],
+        research_block=research_block,
     )
 
     text = await _call_haiku(prompt)
@@ -112,6 +122,19 @@ async def run_preflight(
     if text.startswith("```"):
         lines = text.splitlines()
         text = "\n".join(l for l in lines if not l.startswith("```")).strip()
+
+    # Extract the first JSON object, ignoring trailing prose
+    brace = text.find("{")
+    if brace >= 0:
+        depth = 0
+        for i in range(brace, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    text = text[brace : i + 1]
+                    break
 
     data = json.loads(text)
 
@@ -133,6 +156,58 @@ async def run_preflight(
         cross_cutting=cross_cutting,
         summary=data.get("summary", ""),
     )
+
+
+async def run_preflight_with_proof(
+    spec_text: str,
+    repo_local_path: str | None = None,
+    repo: str = "",
+    store: object | None = None,
+) -> tuple[PreflightResult, PreflightResult | None]:
+    """Two-pass preflight: fast score → proof research → refined score.
+
+    Returns (fast_result, refined_result).  refined_result is None if proof
+    found no unknowns or the fast score was far from the boundary (≤ 2 or ≥ 6).
+
+    When store is provided (a BeadStore), proof findings are persisted so they
+    can be picked up by plan-refine without re-running the subprocess.
+    """
+    import uuid
+
+    fast = await run_preflight(spec_text, repo_local_path)
+
+    # Only run proof if score is on or near the boundary (3–5) or ambiguity ≥ 1.
+    near_boundary = 3 <= fast.total <= 5
+    has_ambiguity = fast.ambiguity.score >= 1
+    if not (near_boundary or has_ambiguity):
+        return fast, None
+
+    from proof.core import research
+    from proof.extractor import extract_unknowns
+
+    groups = await extract_unknowns(spec_text)
+    if not groups:
+        return fast, None
+
+    result = await research(
+        groups,
+        repo=repo,
+        repo_local_path=repo_local_path,
+    )
+
+    # Persist findings to bead store so plan-refine can read them.
+    if store is not None:
+        run_id = uuid.uuid4().hex[:8]
+        for finding in result.findings:
+            node_id = f"preflight-{run_id}-{finding.group}"
+            store.store_research_findings(node_id, finding.findings)  # type: ignore[attr-defined]
+
+    refined = await run_preflight(
+        spec_text,
+        repo_local_path,
+        research_findings=result.markdown,
+    )
+    return fast, refined
 
 
 async def _call_haiku(prompt: str) -> str:

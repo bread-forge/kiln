@@ -18,6 +18,7 @@ dependencies = [
     "anthropic>=0.84.0",
     "textual>=8.0.2",
     "beads",
+    "proof",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +50,7 @@ ignore = ["E501"]
 
 [tool.uv.sources]
 beads = { path = "../beads", editable = true }
+proof = { path = "../proof", editable = true }
 
 [dependency-groups]
 dev = [
