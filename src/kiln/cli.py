@@ -52,6 +52,7 @@ app = typer.Typer(
 )
 console = Console()
 
+
 repo_app = typer.Typer(help="Manage platform repo registry.")
 app.add_typer(repo_app, name="repo")
 
@@ -94,7 +95,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
@@ -359,6 +360,169 @@ def _ensure_ci_auth(repo: str) -> None:
     )
 
 
+def _patch_ci_runs_on(repo: str) -> None:
+    """Patch ci.yml to use self-hosted runner instead of ubuntu-latest. Idempotent."""
+    import base64
+
+    r = subprocess.run(
+        ["gh", "api", f"repos/{repo}/contents/.github/workflows/ci.yml"],
+        capture_output=True,
+        text=True,
+    )
+    if r.returncode != 0:
+        return
+    try:
+        data = json.loads(r.stdout)
+        content = base64.b64decode(data["content"]).decode("utf-8")
+        sha = data["sha"]
+    except (json.JSONDecodeError, KeyError, Exception):
+        return
+
+    if "self-hosted" in content:
+        return  # already patched
+
+    patched = content.replace("runs-on: ubuntu-latest", "runs-on: self-hosted")
+    if patched == content:
+        return
+
+    encoded = base64.b64encode(patched.encode("utf-8")).decode("ascii")
+    subprocess.run(
+        [
+            "gh",
+            "api",
+            f"repos/{repo}/contents/.github/workflows/ci.yml",
+            "-X",
+            "PUT",
+            "-f",
+            "message=ci: use self-hosted runner",
+            "-f",
+            f"content={encoded}",
+            "-f",
+            f"sha={sha}",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+
+def _register_runner(repo: str) -> None:
+    """Register and start a self-hosted runner for *repo* on this machine. Idempotent."""
+    import platform
+    import tarfile
+    import urllib.request
+
+    # Check if an online runner already exists
+    r = subprocess.run(
+        [
+            "gh", "api", f"repos/{repo}/actions/runners",
+            "--jq", '[.runners[] | select(.status == "online")] | length',
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if r.returncode == 0 and r.stdout.strip() not in ("0", ""):
+        return  # already have an online runner
+
+    runner_base = Path.home() / "actions-runner"
+    sanitized = repo.replace("/", "-")
+    runner_dir = runner_base / sanitized
+    runner_dir.mkdir(parents=True, exist_ok=True)
+
+    # Detect platform
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    if system == "darwin":
+        os_tag = "osx"
+        arch_tag = "arm64" if machine == "arm64" else "x64"
+    else:
+        os_tag = "linux"
+        arch_tag = "arm64" if machine in ("aarch64", "arm64") else "x64"
+
+    # Get latest runner version
+    ver_r = subprocess.run(
+        ["gh", "api", "repos/actions/runner/releases/latest", "--jq", ".tag_name"],
+        capture_output=True,
+        text=True,
+    )
+    version = ver_r.stdout.strip().lstrip("v") if ver_r.returncode == 0 else "2.322.0"
+
+    tarball_name = f"actions-runner-{os_tag}-{arch_tag}-{version}.tar.gz"
+    tarball_path = runner_base / tarball_name
+
+    config_sh = runner_dir / "config.sh"
+    if not config_sh.exists():
+        if not tarball_path.exists():
+            url = f"https://github.com/actions/runner/releases/download/v{version}/{tarball_name}"
+            urllib.request.urlretrieve(url, tarball_path)
+        with tarfile.open(tarball_path) as tf:
+            tf.extractall(runner_dir)
+
+    # Get registration token
+    token_r = subprocess.run(
+        [
+            "gh", "api", f"repos/{repo}/actions/runners/registration-token",
+            "--method", "POST", "--jq", ".token",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if token_r.returncode != 0:
+        return
+    token = token_r.stdout.strip()
+
+    runner_name = f"kiln-{sanitized}"
+    subprocess.run(
+        [
+            str(config_sh),
+            "--unattended",
+            "--url", f"https://github.com/{repo}",
+            "--token", token,
+            "--name", runner_name,
+            "--labels", "self-hosted",
+            "--replace",
+        ],
+        cwd=runner_dir,
+        capture_output=True,
+        text=True,
+    )
+
+    # Install as a launchd user agent (no sudo required)
+    label = f"com.github.actions.runner.{sanitized}"
+    plist_path = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
+    if not plist_path.exists():
+        log_dir = runner_dir / "_diag"
+        log_dir.mkdir(exist_ok=True)
+        plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{runner_dir}/run.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>{runner_dir}</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{log_dir}/runner.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>{log_dir}/runner.stderr.log</string>
+</dict>
+</plist>
+"""
+        plist_path.write_text(plist_content)
+        subprocess.run(
+            ["launchctl", "load", str(plist_path)],
+            capture_output=True,
+            text=True,
+        )
+
+
 def _scaffold_repo(repo: str) -> None:
     """Ensure all required labels exist on the repo and the repo has at least one commit. Idempotent."""
     # Initialize empty repos before creating labels (labels fail on empty repos too)
@@ -374,9 +538,11 @@ def _scaffold_repo(repo: str) -> None:
     except (json.JSONDecodeError, KeyError):
         pass
 
-    # Install CI workflow if missing, then patch auth if needed
+    # Install CI workflow if missing, then patch auth and runner target
     _install_ci_workflow(repo, branch="mainline")
     _ensure_ci_auth(repo)
+    _patch_ci_runs_on(repo)
+    _register_runner(repo)
 
     # Get existing labels
     r = subprocess.run(
@@ -544,14 +710,20 @@ def _print_dry_run_summary(
 
     console.print(f"\n[bold yellow][dry-run] Plan summary for {milestone}[/bold yellow]")
 
-    # Find the plan node to get the PlanArtifact
-    plan_node = None
-    build_nodes = []
-    for node in graph.all_nodes():
-        if node.type == "plan" and node.state == "done":
-            plan_node = node
-        elif node.type == "build":
-            build_nodes.append(node)
+    # Find the most recent done plan node (prefer plan-refine over initial plan)
+    # and collect all initial unknowns to compute what was resolved.
+    all_done_plans = [
+        n for n in graph.all_nodes() if n.type == "plan" and n.state == "done"
+    ]
+    # Sort by completed_at descending; fall back to id-based ordering (refine > initial)
+    all_done_plans.sort(
+        key=lambda n: (n.completed_at or n.created_at, "refine" in n.id),
+        reverse=True,
+    )
+    plan_node = all_done_plans[0] if all_done_plans else None
+    initial_plan = all_done_plans[-1] if all_done_plans else None
+
+    build_nodes = [n for n in graph.all_nodes() if n.type == "build"]
 
     if plan_node and plan_node.output.get("artifact"):
         artifact = plan_node.output["artifact"]
@@ -560,8 +732,16 @@ def _print_dry_run_summary(
             f"[dim]Confidence:[/dim] {artifact.get('confidence', 0):.0%}  "
             f"[dim]Risk:[/dim] {', '.join(artifact.get('risk_flags', [])) or 'none'}"
         )
-        if artifact.get("unknowns"):
-            console.print(f"[dim]Unknowns resolved:[/dim] {', '.join(artifact['unknowns'][:3])}")
+        # Show unknowns that were resolved (initial unknowns minus remaining)
+        initial_unknowns = set(
+            (initial_plan.output.get("artifact") or {}).get("unknowns", [])
+        ) if initial_plan else set()
+        remaining_unknowns = set(artifact.get("unknowns", []))
+        resolved = initial_unknowns - remaining_unknowns
+        if resolved:
+            console.print(f"[dim]Unknowns resolved:[/dim] {', '.join(list(resolved)[:3])}")
+        if remaining_unknowns:
+            console.print(f"[dim]Remaining unknowns:[/dim] {', '.join(list(remaining_unknowns)[:3])}")
 
     if not build_nodes:
         console.print("[yellow]No build nodes emitted — check plan output above.[/yellow]")
@@ -619,6 +799,10 @@ def run(
         float | None,
         typer.Option("--max-budget", help="Stop if total LLM cost exceeds this amount (USD)."),
     ] = None,
+    max_research_rounds: Annotated[
+        int,
+        typer.Option("--max-research-rounds", help="Max research rounds before hard-failing on low confidence (default 2)."),
+    ] = 2,
 ) -> None:
     """Parse spec(s), file GitHub issues, and dispatch agents."""
     import os as _os
@@ -631,6 +815,7 @@ def run(
         config.concurrency = concurrency
     if model:
         config.model = model
+    config.max_research_rounds = max_research_rounds
 
     # Health check runs with operator credentials so gh-auth passes cleanly.
     report = run_health_checks(repo)
@@ -951,6 +1136,81 @@ def plan(
 
     store.write_campaign_bead(campaign)
     console.print(f"\nPlanned {total_filed} issue(s). Campaign updated.")
+
+
+@app.command()
+def preflight(
+    spec: Annotated[Path, typer.Argument(help="Spec markdown file to evaluate.")],
+    repo: Annotated[str | None, typer.Option(help="owner/repo for codebase context.")] = None,
+    repo_path: Annotated[str | None, typer.Option(help="Local path to repo checkout.")] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Decide whether a spec should run in Claude Code (CC) or kiln (autonomous batch).
+
+    Scores the spec on four signals — volume, novelty, ambiguity, cross_cutting —
+    and recommends a route. No side effects; does not start any work.
+    """
+    import asyncio as _asyncio
+
+    from kiln.preflight import run_preflight
+
+    if not spec.exists():
+        console.print(f"[red]error:[/red] spec not found: {spec}")
+        raise typer.Exit(1)
+
+    spec_text = spec.read_text(encoding="utf-8")
+
+    # Resolve local repo path for codebase context
+    local_path = repo_path
+    if not local_path and repo:
+        # Try common checkout locations
+        for candidate in (
+            Path.cwd(),
+            Path.home() / "Documents" / "dev" / "github" / repo,
+            Path.home() / repo.split("/")[-1],
+        ):
+            if candidate.is_dir() and (candidate / ".git").exists():
+                local_path = str(candidate)
+                break
+
+    result = _asyncio.run(run_preflight(spec_text, local_path))
+
+    if json_output:
+        import dataclasses
+        console.print(json.dumps({
+            "route": result.route,
+            "total": result.total,
+            "confidence": round(result.confidence, 2),
+            "summary": result.summary,
+            "signals": {
+                "volume": {"score": result.volume.score, "reason": result.volume.reason},
+                "novelty": {"score": result.novelty.score, "reason": result.novelty.reason},
+                "ambiguity": {"score": result.ambiguity.score, "reason": result.ambiguity.reason},
+                "cross_cutting": {"score": result.cross_cutting.score, "reason": result.cross_cutting.reason},
+            },
+        }, indent=2))
+        return
+
+    route_color = "green" if result.route == "kiln" else "yellow"
+    route_label = "kiln (autonomous batch)" if result.route == "kiln" else "Claude Code (interactive)"
+    console.print(f"\nRoute: [{route_color}]{route_label}[/{route_color}]  (score {result.total}/8, confidence {result.confidence:.0%})\n")
+
+    signal_rows = [
+        ("volume",        result.volume),
+        ("novelty",       result.novelty),
+        ("ambiguity",     result.ambiguity),
+        ("cross_cutting", result.cross_cutting),
+    ]
+    for name, sig in signal_rows:
+        bar = "█" * sig.score + "░" * (2 - sig.score)
+        console.print(f"  {name:<14} {bar}  {sig.score}/2  {sig.reason}")
+
+    console.print(f"\n  {result.summary}")
+
+    if result.route == "kiln":
+        console.print(f"\n  Run: [bold]kiln run {spec}[/bold]")
+    else:
+        console.print(f"\n  Open Claude Code with spec: [bold]{spec}[/bold]")
 
 
 @app.command()
@@ -1408,6 +1668,209 @@ def cost(
     console.print(table)
 
 
+@app.command()
+def report(
+    repo: Annotated[str | None, typer.Option()] = None,
+    milestone: Annotated[str | None, typer.Option(help="Filter by milestone slug.")] = None,
+    all_reports: Annotated[bool, typer.Option("--all")] = False,
+) -> None:
+    """Show execution report(s) from completed kiln graph runs."""
+    from beads.store import BeadStore
+
+    from kiln.config import Config
+
+    repo = _require_repo(repo)
+    config = Config.from_env(repo)
+    store = BeadStore(config.beads_dir, repo)
+
+    reports = store.list_execution_reports(milestone=milestone)
+    if not reports:
+        console.print("No execution reports found.")
+        return
+
+    to_show = reports if all_reports else reports[:1]
+
+    for r in to_show:
+        outcome_color = {"success": "green", "partial": "yellow", "failed": "red"}.get(
+            r.outcome, "white"
+        )
+        console.print(
+            f"\n[bold]{r.milestone}[/bold]  [{outcome_color}]{r.outcome.upper()}[/{outcome_color}]  "
+            f"{r.completed_at.strftime('%Y-%m-%d %H:%M')} UTC  "
+            f"cost=${r.total_cost_usd:.4f}"
+        )
+        if r.plan_confidence is not None:
+            console.print(f"  Plan confidence: {r.plan_confidence:.0%}")
+        if r.spec_file:
+            console.print(f"  Spec: {r.spec_file}")
+
+        if r.modules:
+            table = Table(show_header=True, box=None, padding=(0, 2))
+            table.add_column("Module")
+            table.add_column("State")
+            table.add_column("Issue")
+            table.add_column("PR")
+            table.add_column("Model")
+            for m in r.modules:
+                state_color = {"done": "green", "abandoned": "red", "pending": "yellow"}.get(
+                    m.state, "white"
+                )
+                table.add_row(
+                    m.module,
+                    f"[{state_color}]{m.state}[/{state_color}]",
+                    f"#{m.issue_number}" if m.issue_number else "-",
+                    f"#{m.pr_number}" if m.pr_number else "-",
+                    m.model or "-",
+                )
+            console.print(table)
+
+        if r.empirical_unknowns:
+            console.print(f"  [dim]Empirical unknowns ({len(r.empirical_unknowns)}):[/dim]")
+            for u in r.empirical_unknowns[:3]:
+                console.print(f"    · {u[:80]}")
+
+        if r.risk_flags:
+            console.print(f"  [dim]Risk flags:[/dim] {', '.join(r.risk_flags)}")
+
+        counts_str = "  ".join(f"{s}={n}" for s, n in sorted(r.node_counts.items()))
+        console.print(f"  [dim]Nodes:[/dim] {counts_str}")
+
+
+@app.command()
+def eval(
+    repo: Annotated[str | None, typer.Option()] = None,
+    milestone: Annotated[str, typer.Option(help="Milestone slug to evaluate.")] = "",
+) -> None:
+    """Contrastive eval: compare baseline plan vs research-informed plan.
+
+    Reads the initial plan node and final plan-refine node from the bead store
+    (requires a prior dry-run). Shows confidence delta, unknown resolution rate,
+    and approach specificity change. No LLM calls — $0 cost.
+    """
+    from beads.store import BeadStore
+    from beads.types import PlanArtifact
+
+    from kiln.config import Config
+
+    repo = _require_repo(repo)
+    config = Config.from_env(repo)
+    store = BeadStore(config.beads_dir, repo)
+
+    nodes = store.list_nodes()
+    plan_nodes = [
+        n for n in nodes
+        if n.type == "plan" and n.state in ("done", "already-done") and n.output
+        and (not milestone or n.context.get("milestone", "").startswith(milestone))
+    ]
+
+    if not plan_nodes:
+        console.print("No completed plan nodes found. Run [bold]kiln run --dry-run[/bold] first.")
+        return
+
+    # Sort by completed_at: earliest is baseline, latest is research-informed
+    plan_nodes.sort(key=lambda n: n.completed_at or n.created_at)
+    baseline_node = plan_nodes[0]
+    final_node = plan_nodes[-1]
+
+    if baseline_node.id == final_node.id:
+        console.print(
+            "[yellow]Only one plan node found — no research was triggered.[/yellow]\n"
+            "Research threshold was not met; baseline plan was used directly."
+        )
+        artifact = PlanArtifact.model_validate(baseline_node.output["artifact"])
+        console.print(f"  Confidence: {artifact.confidence:.0%}")
+        console.print(f"  Unknowns: {len(artifact.unknowns)}")
+        return
+
+    baseline = PlanArtifact.model_validate(baseline_node.output["artifact"])
+    final = PlanArtifact.model_validate(final_node.output["artifact"])
+
+    ms = final.milestone or baseline.milestone
+    console.print(f"\n[bold]Contrastive Eval: {ms}[/bold]")
+    console.print(f"  Baseline node:  {baseline_node.id}")
+    console.print(f"  Final node:     {final_node.id}")
+    console.print()
+
+    # --- Confidence ---
+    conf_delta = final.confidence - baseline.confidence
+    conf_color = "green" if conf_delta > 0.02 else ("red" if conf_delta < -0.02 else "yellow")
+    console.print(
+        f"  Confidence:     {baseline.confidence:.0%} → {final.confidence:.0%}  "
+        f"[{conf_color}]({conf_delta:+.0%})[/{conf_color}]"
+    )
+
+    # --- Unknowns ---
+    initial_unk = set(baseline.unknowns)
+    final_unk = set(final.unknowns)
+    resolved = initial_unk - final_unk
+    new_unk = final_unk - initial_unk
+    console.print(
+        f"  Unknowns:       {len(initial_unk)} → {len(final_unk)}  "
+        f"[green]({len(resolved)} resolved)[/green]"
+        + (f"  [yellow](+{len(new_unk)} new)[/yellow]" if new_unk else "")
+    )
+
+    # --- Module approach specificity (word count proxy) ---
+    modules_changed = 0
+    approach_rows = []
+    for mod in final.modules:
+        base_approach = baseline.module_approaches.get(mod, baseline.approach)
+        final_approach = final.module_approaches.get(mod, final.approach)
+        base_words = len(base_approach.split())
+        final_words = len(final_approach.split())
+        changed = base_approach.strip() != final_approach.strip()
+        if changed:
+            modules_changed += 1
+        approach_rows.append((mod, base_words, final_words, changed))
+
+    console.print(
+        f"  Approaches:     {modules_changed}/{len(final.modules)} modules changed"
+    )
+    if approach_rows:
+        tbl = Table(show_header=True, box=None, padding=(0, 2))
+        tbl.add_column("Module")
+        tbl.add_column("Baseline words", justify="right")
+        tbl.add_column("Final words", justify="right")
+        tbl.add_column("Changed")
+        for mod, bw, fw, changed in approach_rows:
+            tbl.add_row(
+                mod,
+                str(bw),
+                str(fw),
+                "[green]yes[/green]" if changed else "[dim]no[/dim]",
+            )
+        console.print(tbl)
+
+    # --- Risk flags / new deps ---
+    new_flags = set(final.risk_flags) - set(baseline.risk_flags)
+    new_deps = set(final.new_dependencies) - set(baseline.new_dependencies)
+    if new_flags:
+        console.print(f"  New risk flags: {', '.join(new_flags)}")
+    if new_deps:
+        console.print(f"  New deps:       {', '.join(new_deps)}")
+
+    # --- Verdict ---
+    console.print()
+    if conf_delta > 0.10 and len(resolved) >= 2:
+        verdict = "[bold green]STRONG BENEFIT[/bold green]"
+    elif conf_delta > 0.02 or len(resolved) > 0:
+        verdict = "[bold yellow]MARGINAL BENEFIT[/bold yellow]"
+    elif conf_delta < -0.05:
+        verdict = "[bold red]HARMFUL — research reduced confidence[/bold red]"
+    else:
+        verdict = "[bold red]NO BENEFIT — research changed nothing[/bold red]"
+
+    console.print(f"  Verdict: {verdict}")
+
+    # Rough cost estimate
+    n_research = len([n for n in nodes if n.type == "research" and n.state == "done"])
+    est_cost = n_research * 0.008 + 0.06  # haiku per group + sonnet refine
+    console.print(f"  Est. research overhead: ~${est_cost:.2f}")
+    if final.confidence > 0:
+        breakeven_pct = (est_cost / 2.0) * 100  # $2 avg failed build cost
+        console.print(f"  Break-even CI improvement needed: ~{breakeven_pct:.1f}%")
+
+
 # ---------------------------------------------------------------------------
 # Repo subcommands
 # ---------------------------------------------------------------------------
@@ -1776,7 +2239,8 @@ def _milestone_summary(nodes: list) -> tuple[int, int, str, str, str, float]:
     states = [n.get("state", "") for n in nodes]
     total = len(states)
     done = states.count("done") + states.count("already-done") + states.count("wont-do")
-    pending = states.count("pending") + states.count("running")
+    running = states.count("running")
+    pending = states.count("pending")
     abandoned = states.count("abandoned")
     failed = states.count("failed")
 
@@ -1796,13 +2260,21 @@ def _milestone_summary(nodes: list) -> tuple[int, int, str, str, str, float]:
             parts.append(f"{abandoned} abandoned")
         if failed:
             parts.append(f"{failed} failed")
+        if running:
+            parts.append(f"{running} running")
         if pending:
             parts.append(f"{pending} pending")
         status = "  ".join(parts)
         bar_color = "red"
+    elif running:
+        parts = [f"{running} running"]
+        if pending:
+            parts.append(f"{pending} pending")
+        status = "  ".join(parts)
+        bar_color = "yellow"
     elif pending:
         status = f"{pending} pending"
-        bar_color = "yellow"
+        bar_color = "dim"
     elif done == total:
         status = "complete"
         bar_color = "green"
@@ -1813,7 +2285,7 @@ def _milestone_summary(nodes: list) -> tuple[int, int, str, str, str, float]:
     return done, total, f"[{bar_color}]{bar}[/{bar_color}]", status, bar_color, cost_usd
 
 
-def _build_dashboard() -> Group:
+def _build_dashboard(show_cost: bool = False) -> Group:
     """Build a static Rich table from bead store (used by --watch)."""
     from rich.text import Text
 
@@ -1827,22 +2299,26 @@ def _build_dashboard() -> Group:
     table.add_column("Nodes", justify="right", no_wrap=True)
     table.add_column("", no_wrap=True)
     table.add_column("Status", no_wrap=True)
-    table.add_column("Cost", justify="right", no_wrap=True)
+    if show_cost:
+        table.add_column("Cost", justify="right", no_wrap=True)
 
     repo_costs: dict[str, float] = {}
     for repo, ms, nodes in rows:
         done, total, bar_markup, status, _color, cost = _milestone_summary(nodes)
         repo_costs[repo] = repo_costs.get(repo, 0.0) + cost
-        cost_str = f"${cost:.2f}" if cost else ""
-        table.add_row(repo, ms, f"{done}/{total}", bar_markup, status, cost_str)
+        row = [repo, ms, f"{done}/{total}", bar_markup, status]
+        if show_cost:
+            row.append(f"${cost:.2f}" if cost else "")
+        table.add_row(*row)
 
     return Group(table)
 
 
-def _launch_dashboard_tui() -> None:
+def _launch_dashboard_tui(show_cost: bool = False) -> None:
     """Launch the interactive Textual dashboard."""
     import json as _json
 
+    from rich.markup import escape as _escape
     from textual.app import App, ComposeResult
     from textual.binding import Binding
     from textual.containers import Container, ScrollableContainer
@@ -1860,16 +2336,22 @@ def _launch_dashboard_tui() -> None:
     }
     _RETRYABLE = {"abandoned", "failed"}
 
-    def _node_label(node: dict) -> str:
+    def _node_label(node: dict, ms_prefix: str = "") -> str:
         nid = node.get("id", "?")
+        display_id = nid[len(ms_prefix):].lstrip("-") if ms_prefix and nid.startswith(ms_prefix) else nid
         state = node.get("state", "?")
         ntype = node.get("type", "")
         color = _STATE_COLOR.get(state, "white")
-        cost = node.get("output", {}) or {}
+        out = node.get("output", {}) or {}
         cost_str = ""
-        if isinstance(cost, dict) and cost.get("cost_usd"):
-            cost_str = f"  [dim]${cost['cost_usd']:.2f}[/dim]"
-        return f"[{color}]{state:10}[/{color}]  [{('bold' if ntype == 'build' else 'dim')}]{nid}[/]  [dim]{ntype}[/dim]{cost_str}"
+        if show_cost and isinstance(out, dict) and out.get("cost_usd"):
+            cost_str = f"  [dim]${out['cost_usd']:.2f}[/dim]"
+        conf_str = ""
+        if isinstance(out, dict) and out.get("confidence") is not None:
+            c = out["confidence"]
+            conf_color = "green" if c >= 0.8 else ("yellow" if c >= 0.6 else "red")
+            conf_str = f"  [{conf_color}]{c:.2f}[/{conf_color}]"
+        return f"[{color}]{_escape(state):10}[/{color}]  [{('bold' if ntype == 'build' else 'dim')}]{_escape(display_id)}[/]{conf_str}{cost_str}"
 
     def _bead_path(repo: str, node_id: str) -> Path:
         parts = repo.split("/", 1)
@@ -1919,35 +2401,36 @@ def _launch_dashboard_tui() -> None:
             ntype = node.get("type", "?")
             color = _STATE_COLOR.get(state, "white")
 
-            lines: list[str] = []
-            lines.append(f"[bold]Repo:[/bold]  {self._repo}")
-            lines.append(f"[bold]ID:[/bold]    {nid}")
-            lines.append(f"[bold]Type:[/bold]  {ntype}")
-            lines.append(f"[bold]State:[/bold] [{color}]{state}[/{color}]")
+            header_lines: list[str] = []
+            header_lines.append(f"[bold]Repo:[/bold]  {_escape(self._repo)}")
+            header_lines.append(f"[bold]ID:[/bold]    {_escape(nid)}")
+            header_lines.append(f"[bold]Type:[/bold]  {_escape(ntype)}")
+            header_lines.append(f"[bold]State:[/bold] [{color}]{_escape(state)}[/{color}]")
 
             for ts_key in ("created_at", "started_at", "finished_at"):
                 if node.get(ts_key):
-                    lines.append(f"[bold]{ts_key}:[/bold] {node[ts_key]}")
+                    header_lines.append(f"[bold]{ts_key}:[/bold] {_escape(str(node[ts_key]))}")
 
+            plain_parts: list[str] = []
             ctx = node.get("context") or {}
             if ctx:
-                lines.append("")
-                lines.append("[bold cyan]Context[/bold cyan]")
-                lines.append(_json.dumps(ctx, indent=2))
+                plain_parts.append("Context\n" + _json.dumps(ctx, indent=2))
 
             out = node.get("output") or {}
             if out:
-                lines.append("")
-                lines.append("[bold cyan]Output[/bold cyan]")
-                lines.append(_json.dumps(out, indent=2))
+                plain_parts.append("Output\n" + _json.dumps(out, indent=2))
 
             retry_hint = ""
             if state in _RETRYABLE:
                 retry_hint = "  [bold yellow]x[/bold yellow] Retry"
 
             yield Container(
-                Static(f"Node — {nid}", id="dialog-title"),
-                ScrollableContainer(Static("\n".join(lines)), id="dialog-content"),
+                Static(f"Node — {_escape(nid)}", id="dialog-title"),
+                ScrollableContainer(
+                    Static("\n".join(header_lines)),
+                    Static("\n\n".join(plain_parts), markup=False),
+                    id="dialog-content",
+                ),
                 Static(f"[dim]Esc / q — close{retry_hint}[/dim]", id="dialog-footer"),
                 id="dialog",
             )
@@ -2026,7 +2509,7 @@ def _launch_dashboard_tui() -> None:
             for repo, ms, nodes in rows:
                 if repo != last_repo:
                     total_cost = repo_cost.get(repo, 0.0)
-                    cost_suffix = f"  [dim]${total_cost:.2f}[/dim]" if total_cost else ""
+                    cost_suffix = f"  [dim]${total_cost:.2f}[/dim]" if (show_cost and total_cost) else ""
                     repo_node = tree.root.add(
                         f"[cyan bold]{repo}[/cyan bold]{cost_suffix}",
                         expand=repo in restore_expanded,
@@ -2037,7 +2520,7 @@ def _launch_dashboard_tui() -> None:
 
                 done, total, bar_markup, status, color, cost = _milestone_summary(nodes)
                 ms_key = f"{repo}/{ms}"
-                cost_str = f"  [dim]${cost:.2f}[/dim]" if cost else ""
+                cost_str = f"  [dim]${cost:.2f}[/dim]" if (show_cost and cost) else ""
                 ms_label = (
                     f"{bar_markup}  [bold]{ms}[/bold]  "
                     f"[dim]{done}/{total}[/dim]  [{color}]{status}[/{color}]{cost_str}"
@@ -2048,20 +2531,55 @@ def _launch_dashboard_tui() -> None:
                     data={"key": ms_key},
                 )
 
-                _ORDER = {
-                    "plan": 0,
-                    "research": 1,
-                    "build": 2,
-                    "merge": 3,
-                    "readme": 4,
-                    "validate": 5,
-                    "bug": 6,
-                }
-                sorted_nodes = sorted(
-                    nodes, key=lambda n: (_ORDER.get(n.get("type", ""), 9), n.get("id", ""))
-                )
-                for n in sorted_nodes:
-                    ms_node.add_leaf(_node_label(n), data={"node": n, "repo": repo})
+                # Group nodes by pipeline stage, in order:
+                #   plan → research·r1 (+ plan-refine-1) → research·r2 (+ plan-refine-2) → build → merge
+                import re as _re2
+
+                def _research_round(nid: str) -> int:
+                    m = _re2.search(r"-research-r(\d+)-", nid)
+                    if m:
+                        return int(m.group(1))
+                    # old format: ...-research-...-plan-refine-{N}-...
+                    m = _re2.search(r"-research-.*-plan-refine-(\d+)-", nid)
+                    if m:
+                        return int(m.group(1)) + 1
+                    return 1  # old format round 1 or unknown
+
+                def _refine_round(nid: str) -> int:
+                    m = _re2.search(r"-plan-refine-(\d+)$", nid)
+                    return int(m.group(1)) if m else 1
+
+                def _stage_key(n: dict) -> tuple[int, str]:
+                    ntype = n.get("type", "")
+                    nid = n.get("id", "")
+                    if ntype == "plan" and "refine" not in nid:
+                        return (0, "plan")
+                    if ntype == "research":
+                        r = _research_round(nid)
+                        return (1, f"research · r{r}")
+                    if ntype == "plan" and "refine" in nid:
+                        r = _refine_round(nid)
+                        return (1, f"research · r{r}")
+                    if ntype in ("build", "readme"):
+                        return (2, "build")
+                    if ntype == "merge":
+                        return (3, "merge")
+                    return (4, "other")
+
+                from itertools import groupby as _groupby
+                stage_sorted = sorted(nodes, key=lambda n: (_stage_key(n), n.get("id", "")))
+                for (_, stage_label), group_iter in _groupby(stage_sorted, key=_stage_key):
+                    group_nodes = list(group_iter)
+                    stage_key = f"{ms_key}/{stage_label}"
+                    grp = ms_node.add(
+                        f"[dim]{stage_label}  ({len(group_nodes)})[/dim]",
+                        expand=stage_key in restore_expanded or any(
+                            n.get("state") in ("running", "failed", "abandoned") for n in group_nodes
+                        ),
+                        data={"key": stage_key},
+                    )
+                    for n in group_nodes:
+                        grp.add_leaf(_node_label(n, ms_prefix=ms), data={"node": n, "repo": repo})
 
         def _cursor_node_data(self) -> dict | None:
             tree: Tree = self.query_one("#tree", Tree)
@@ -2125,6 +2643,9 @@ def dashboard(
     watch: Annotated[
         bool, typer.Option("--watch", "-w", help="Non-interactive live refresh every 5s.")
     ] = False,
+    show_cost: Annotated[
+        bool, typer.Option("--cost", help="Show cost estimates in the dashboard.")
+    ] = False,
 ) -> None:
     """Interactive dashboard — arrow keys to navigate, space/enter to expand nodes."""
     import time as _time
@@ -2134,11 +2655,11 @@ def dashboard(
 
         with Live(console=console, refresh_per_second=1) as live:
             while True:
-                live.update(_build_dashboard())
+                live.update(_build_dashboard(show_cost=show_cost))
                 _time.sleep(5)
         return
 
-    _launch_dashboard_tui()
+    _launch_dashboard_tui(show_cost=show_cost)
 
 
 @app.command()
