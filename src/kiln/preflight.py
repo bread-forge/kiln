@@ -12,11 +12,22 @@ Each signal scores 0–2. Total ≤ 4 → kiln. Total > 4 → CC.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 
 _PREFLIGHT_MODEL = "claude-haiku-4-5-20251001"
+
+_STOPWORDS = frozenset([
+    "the", "this", "that", "with", "from", "into", "have", "been", "will",
+    "what", "when", "where", "which", "they", "them", "their", "there", "then",
+    "than", "these", "those", "some", "such", "more", "most", "other", "each",
+    "every", "also", "just", "only", "should", "would", "could", "must", "does",
+    "were", "has", "had", "and", "or", "not", "but", "for", "are", "its", "all",
+    "any", "how", "out", "can", "may", "get", "set", "new", "use", "used",
+])
 
 _PROMPT = """\
 You are a routing agent. Given a task spec and codebase context, score the task
@@ -28,7 +39,7 @@ Spec:
 
 Codebase context:
 {codebase_context}
-{research_block}
+{codebase_evidence_block}{research_block}
 ---
 
 Score each signal from 0 to 2. Output ONLY valid JSON — no markdown fences, no prose.
@@ -92,6 +103,100 @@ class PreflightResult:
         return min(1.0, distance / 4.0 + 0.5)
 
 
+def _resolve_unknowns_from_codebase(spec_text: str, repo_local_path: str) -> str:
+    """Search the repo for existing code that answers the spec's unknowns.
+
+    Extracts key terms from the spec's unknowns section, greps the source tree
+    for files containing those terms, reads the top matches, and returns a
+    formatted block.  No LLM calls — pure grep + read.  Fast enough to run on
+    every preflight invocation.
+
+    Returns an empty string if nothing relevant is found.
+    """
+    root = Path(repo_local_path)
+
+    # --- 1. Extract search terms from the unknowns section ---
+    # Look for a section headed "Unknowns", "Key Unknowns", or similar.
+    unknown_section = ""
+    m = re.search(
+        r"#+\s*(?:key\s+)?unknowns.*?\n(.*?)(?=\n#+\s|\Z)",
+        spec_text,
+        re.I | re.S,
+    )
+    if m:
+        unknown_section = m.group(1)
+    else:
+        # Fall back to lines that look like questions or unknowns markers
+        question_lines = [
+            line for line in spec_text.splitlines()
+            if "?" in line or re.search(r"\[P[0-9]\]|unknown|unclear|TBD", line, re.I)
+        ]
+        unknown_section = "\n".join(question_lines)
+
+    if not unknown_section.strip():
+        return ""
+
+    # Extract meaningful words (> 4 chars, not stopwords, not pure numbers)
+    raw_terms = re.findall(r"[a-zA-Z][a-zA-Z_\-]{3,}", unknown_section)
+    terms = list(dict.fromkeys(  # preserve order, deduplicate
+        t.lower() for t in raw_terms
+        if t.lower() not in _STOPWORDS and not t.isdigit()
+    ))[:20]  # cap at 20 search terms
+
+    if not terms:
+        return ""
+
+    # --- 2. Find source files containing any of the terms ---
+    src_dirs = [d for name in ("src", "packages") if (d := root / name).is_dir()] or [root]
+    candidate_files: list[Path] = []
+    for sd in src_dirs:
+        for ext in ("*.py", "*.yaml", "*.yml", "*.toml"):
+            candidate_files.extend(
+                f for f in sd.rglob(ext)
+                if "test" not in f.parts and "__pycache__" not in f.parts
+            )
+
+    # Score each file by how many search terms it contains
+    file_scores: dict[Path, int] = {}
+    for path in candidate_files:
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore").lower()
+        except OSError:
+            continue
+        score = sum(1 for t in terms if t in text)
+        if score > 0:
+            file_scores[path] = score
+
+    if not file_scores:
+        return ""
+
+    # --- 3. Read top 6 files by score, cap total at 4000 chars ---
+    top_files = sorted(file_scores, key=file_scores.__getitem__, reverse=True)[:6]
+    parts: list[str] = []
+    total = 0
+    for path in top_files:
+        try:
+            content = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        rel = path.relative_to(root)
+        snippet = content[:600]
+        entry = f"# {rel} (matches: {file_scores[path]})\n{snippet}"
+        if total + len(entry) > 4000:
+            break
+        parts.append(entry)
+        total += len(entry)
+
+    if not parts:
+        return ""
+
+    return (
+        "Codebase evidence for spec unknowns (existing files that may already answer them):\n"
+        + "\n\n".join(parts)
+        + "\n"
+    )
+
+
 async def run_preflight(
     spec_text: str,
     repo_local_path: str | None = None,
@@ -102,18 +207,24 @@ async def run_preflight(
 
     codebase_ctx = _read_codebase_summary(repo_local_path)
 
-    if research_findings:
-        research_block = (
-            "\nResearch findings (use these to inform novelty and ambiguity scores):\n"
-            + research_findings[:8000]
-            + "\n"
-        )
-    else:
-        research_block = ""
+    codebase_evidence_block = (
+        _resolve_unknowns_from_codebase(spec_text, repo_local_path) + "\n"
+        if repo_local_path
+        else ""
+    )
+
+    research_block = (
+        "\nResearch findings (use these to inform novelty and ambiguity scores):\n"
+        + research_findings[:8000]
+        + "\n"
+        if research_findings
+        else ""
+    )
 
     prompt = _PROMPT.format(
         spec_text=spec_text[:6000],
         codebase_context=codebase_ctx[:8000],
+        codebase_evidence_block=codebase_evidence_block,
         research_block=research_block,
     )
 
