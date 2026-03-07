@@ -215,13 +215,21 @@ class TestBuildHandler:
             confidence=0.9,
             risk_flags=["security"],  # should force opus
         )
+        # Store the plan node bead so BuildHandler._assess() can load the artifact
+        plan_node = GraphNode(
+            id="v1-plan",
+            type="plan",
+            state="done",
+            output={"artifact": artifact.model_dump(), "new_nodes": []},
+        )
+        store.write_node(plan_node)
         node = GraphNode(
             id="v1-build-core",
             type="build",
             context={
                 "module": "core",
                 "milestone": "v1.0",
-                "plan_artifact": artifact.model_dump(),
+                "plan_node_id": "v1-plan",
             },
         )
 
@@ -379,5 +387,106 @@ class TestResearchHandler:
             asyncio.run(handler.execute(node, config))
 
         call_kwargs = mock_run.call_args.kwargs
-        assert call_kwargs.get("allowed_tools") == ["WebSearch", "WebFetch"]
+        assert call_kwargs.get("allowed_tools") == ["WebSearch", "WebFetch", "Bash", "Glob", "Grep", "Read"]
         assert call_kwargs.get("timeout_minutes") == 15
+
+
+# ---------------------------------------------------------------------------
+# _read_codebase_summary tests
+# ---------------------------------------------------------------------------
+
+
+class TestReadCodebaseSummary:
+    """Tests for the codebase context extractor used by the plan LLM."""
+
+    from kiln.graph.handlers.plan import _read_codebase_summary as _rcs  # type: ignore[attr-defined]
+
+    def _rcs(self, path: Path) -> str:
+        from kiln.graph.handlers.plan import _read_codebase_summary
+        return _read_codebase_summary(str(path))
+
+    def test_returns_empty_for_none(self) -> None:
+        from kiln.graph.handlers.plan import _read_codebase_summary
+        assert _read_codebase_summary(None) == ""
+
+    def test_returns_empty_for_missing_path(self, tmp_path: Path) -> None:
+        from kiln.graph.handlers.plan import _read_codebase_summary
+        assert _read_codebase_summary(str(tmp_path / "nonexistent")) == ""
+
+    def test_includes_claude_md(self, tmp_path: Path) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# project instructions\nModule table here.")
+        result = self._rcs(tmp_path)
+        assert "project instructions" in result
+        assert "CLAUDE.md" in result
+
+    def test_includes_standards(self, tmp_path: Path) -> None:
+        std = tmp_path / "standards"
+        std.mkdir()
+        (std / "councils.md").write_text("All councils must persist turns to DB.")
+        result = self._rcs(tmp_path)
+        assert "persist turns to DB" in result
+        assert "Project standards" in result
+
+    def test_standards_appear_before_inventory(self, tmp_path: Path) -> None:
+        std = tmp_path / "standards"
+        std.mkdir()
+        (std / "api.md").write_text("API standard text.")
+        src = tmp_path / "src" / "pkg"
+        src.mkdir(parents=True)
+        (src / "mod.py").write_text("def run(): pass\n")
+        result = self._rcs(tmp_path)
+        assert result.index("API standard text") < result.index("Source inventory")
+
+    def test_extracts_protocol_contract(self, tmp_path: Path) -> None:
+        src = tmp_path / "src" / "pkg"
+        src.mkdir(parents=True)
+        (src / "base.py").write_text(
+            "from typing import Protocol\n\n"
+            "class CouncilPlugin(Protocol):\n"
+            "    council_id: str\n"
+            "    async def run(self, topic: dict) -> dict: ...\n"
+        )
+        result = self._rcs(tmp_path)
+        assert "CouncilPlugin" in result
+        assert "Contracts" in result
+
+    def test_extracts_typeddict_contract(self, tmp_path: Path) -> None:
+        src = tmp_path / "src" / "pkg"
+        src.mkdir(parents=True)
+        (src / "types.py").write_text(
+            "from typing import TypedDict\n\n"
+            "class CouncilOutput(TypedDict):\n"
+            "    debate_id: str\n"
+            "    status: str\n"
+        )
+        result = self._rcs(tmp_path)
+        assert "CouncilOutput" in result
+        assert "Contracts" in result
+
+    def test_source_inventory_present(self, tmp_path: Path) -> None:
+        src = tmp_path / "src" / "pkg"
+        src.mkdir(parents=True)
+        (src / "council.py").write_text("class RGBCouncil:\n    async def run(self): pass\n")
+        result = self._rcs(tmp_path)
+        assert "Source inventory" in result
+        assert "RGBCouncil" in result
+
+    def test_test_files_excluded_from_inventory(self, tmp_path: Path) -> None:
+        src = tmp_path / "src" / "pkg"
+        src.mkdir(parents=True)
+        (src / "mod.py").write_text("def real_fn(): pass\n")
+        tests = tmp_path / "tests"
+        tests.mkdir()
+        (tests / "test_mod.py").write_text("def test_real_fn(): assert True\n")
+        result = self._rcs(tmp_path)
+        assert "real_fn" in result
+        assert "test_real_fn" not in result
+
+    def test_test_coverage_summary_present(self, tmp_path: Path) -> None:
+        tests = tmp_path / "tests"
+        tests.mkdir()
+        (tests / "test_a.py").write_text("def test_x(): pass\n")
+        (tests / "test_b.py").write_text("def test_y(): pass\n")
+        result = self._rcs(tmp_path)
+        assert "Test coverage" in result
+        assert "2 test file" in result
