@@ -37,6 +37,49 @@ def _get_pr_number(repo: str, branch: str) -> int | None:
         return None
 
 
+def _branch_has_commits(repo: str, branch: str) -> bool:
+    """Return True if branch exists on remote and has commits ahead of the default branch."""
+    r = _gh("repo", "view", repo, "--json", "defaultBranchRef")
+    try:
+        default = json.loads(r.stdout).get("defaultBranchRef", {}).get("name", "main")
+    except (json.JSONDecodeError, AttributeError):
+        default = "main"
+    r = subprocess.run(
+        ["git", "ls-remote", "--exit-code", f"https://github.com/{repo}.git", f"refs/heads/{branch}"],
+        capture_output=True,
+    )
+    if r.returncode != 0:
+        return False
+    # Branch exists — check if it has commits ahead of default
+    r2 = subprocess.run(
+        ["git", "log", f"origin/{default}..origin/{branch}", "--oneline"],
+        capture_output=True,
+        text=True,
+        cwd=None,
+    )
+    return bool(r2.stdout.strip()) if r2.returncode == 0 else True
+
+
+def _create_pr(repo: str, branch: str, issue_number: int | None, issue_title: str) -> int | None:
+    """Create a PR for an existing branch. Returns PR number or None on failure."""
+    body = f"Closes #{issue_number}" if issue_number else ""
+    r = _gh(
+        "pr", "create",
+        "--repo", repo,
+        "--head", branch,
+        "--title", issue_title,
+        "--body", body,
+    )
+    if r.returncode != 0:
+        return None
+    # gh pr create outputs the PR URL; extract number from it
+    url = r.stdout.strip()
+    try:
+        return int(url.rstrip("/").split("/")[-1])
+    except (ValueError, AttributeError):
+        return _get_pr_number(repo, branch)
+
+
 def _is_issue_closed(repo: str, issue_number: int) -> bool:
     r = _gh("issue", "view", str(issue_number), "--repo", repo, "--json", "state")
     try:
@@ -387,9 +430,18 @@ class BuildHandler:
                     already_done=True,
                     output={"already_done": True, "branch": branch},
                 )
-            if issue_number:
-                _unclaim_issue(repo, issue_number)
-            return NodeResult(success=False, error="agent completed but no PR found")
+            # Agent pushed commits but didn't create the PR — try to create it directly
+            if _branch_has_commits(repo, branch):
+                pr_number = _create_pr(repo, branch, issue_number, issue_title)
+                if pr_number and self._logger:
+                    self._logger.info(
+                        f"created PR #{pr_number} for {branch} (agent omitted gh pr create)",
+                        node_id=node.id,
+                    )
+            if not pr_number:
+                if issue_number:
+                    _unclaim_issue(repo, issue_number)
+                return NodeResult(success=False, error="agent completed but no PR found")
 
         # Verify scope: fail if any out-of-scope files were changed
         if files:
@@ -440,12 +492,14 @@ class BuildHandler:
 
         override = config.model if config.model else None
 
-        artifact_data = node.context.get("plan_artifact")
-        if artifact_data:
+        plan_node_id = node.context.get("plan_node_id")
+        if plan_node_id and self._store:
             try:
-                artifact = PlanArtifact.model_validate(artifact_data)
-                module = node.context.get("module", "")
-                return assess_from_plan_artifact(artifact, module, override_model=override)
+                plan_node = self._store.read_node(plan_node_id)
+                if plan_node and plan_node.output:
+                    artifact = PlanArtifact.model_validate(plan_node.output["artifact"])
+                    module = node.context.get("module", "")
+                    return assess_from_plan_artifact(artifact, module, override_model=override)
             except Exception:
                 pass
 
