@@ -193,6 +193,48 @@ def _verify_pr_scope(pr_number: int, repo: str, allowed_files: list[str]) -> lis
     return sorted(changed - allowed)
 
 
+def _install_dependencies(workspace: Path, packages: list[str]) -> str | None:
+    """Run `uv add` in the workspace to install new dependencies.
+
+    Returns an error string on failure, None on success.
+    """
+    if not packages:
+        return None
+    r = subprocess.run(
+        ["uv", "add", *packages],
+        capture_output=True,
+        text=True,
+        cwd=workspace,
+    )
+    if r.returncode != 0:
+        return f"uv add failed: {r.stderr[:300]}"
+    # Stage the updated pyproject.toml and uv.lock so the agent inherits them
+    subprocess.run(
+        ["git", "add", "pyproject.toml", "uv.lock"],
+        capture_output=True,
+        cwd=workspace,
+    )
+    if (
+        subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            capture_output=True,
+            cwd=workspace,
+        ).returncode
+        != 0
+    ):
+        subprocess.run(
+            ["git", "commit", "-m", "chore: add dependencies", "--no-verify"],
+            capture_output=True,
+            cwd=workspace,
+        )
+        subprocess.run(
+            ["git", "push"],
+            capture_output=True,
+            cwd=workspace,
+        )
+    return None
+
+
 def _get_issue(repo: str, issue_number: int) -> dict[str, Any]:
     r = _gh("issue", "view", str(issue_number), "--repo", repo, "--json", "title,body,labels")
     if r.returncode != 0:
@@ -259,6 +301,13 @@ class BuildHandler:
             if issue_number:
                 _unclaim_issue(repo, issue_number)
             return NodeResult(success=False, error=f"workspace setup: {setup_error}")
+
+        # Install any new dependencies declared by the plan before the agent runs
+        new_deps: list[str] = node.context.get("new_dependencies", [])
+        if new_deps:
+            dep_error = _install_dependencies(workspace, new_deps)
+            if dep_error and self._logger:
+                self._logger.error(f"dependency install warning for {node.id}: {dep_error}")
 
         # Strip "<owner>/<repo>/" prefix from file paths before embedding in the prompt.
         # Plan nodes produce fully-qualified paths; agents must work with repo-relative paths.

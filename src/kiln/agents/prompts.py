@@ -229,7 +229,8 @@ Produce a JSON object matching this schema exactly (no markdown fences):
   "risk_flags": ["novel-domain" | "security" | "multi-module-coordination" | ...],
   "module_dependencies": {{
     "<module-that-must-build-last>": ["<module-it-depends-on>", ...]
-  }}
+  }},
+  "new_dependencies": ["<package-spec>", ...]
 }}
 
 Rules:
@@ -246,4 +247,8 @@ Rules:
 - module_dependencies: list any modules that must be fully merged before another can build;
   omit the key entirely for modules with no dependencies (do not emit empty lists);
   integration-test modules should always depend on all other modules
+- new_dependencies: list any third-party packages not already in pyproject.toml that this
+  milestone requires; use PEP 508 specifiers (e.g. "anthropic>=0.40", "textual>=0.70");
+  for packages from the same ecosystem available as git repos, use the repo slug
+  (e.g. "repo-audit @ git+https://github.com/bread-forge/repo-audit.git"); omit if empty
 """

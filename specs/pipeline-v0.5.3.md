@@ -25,6 +25,10 @@ mode the rollback policy determines automatic revert eligibility.
   generate another rollback; escalate to human with `severity: critical` alert
 - All tests pass; new tests cover rollback spec generation, gate rendering, loop prevention
 
+## Dependencies
+
+No new dependencies beyond what is already in `pyproject.toml`.
+
 ## Modules
 
 - `verification/rollback`: RollbackSpecEmitter; rollback spec formatter

@@ -344,6 +344,7 @@ def _emit_build_nodes(
             "repo": repo,
             "plan_artifact": artifact.model_dump(),
             "milestone_issue_number": milestone_issue_number,
+            "new_dependencies": artifact.new_dependencies,
         }
         if issue_number:
             context["issue_number"] = issue_number

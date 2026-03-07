@@ -30,6 +30,15 @@ events. This milestone: dispatch only. Verification comes in v0.5.1.
 - Target repo must have a valid `.kiln-scope` file (or `CLAUDE.md`)
 - `--gate-mode full-auto` is hidden in help text; not for production use
 
+## Dependencies
+
+Add to `pyproject.toml` before building:
+- `kiln @ git+https://github.com/bread-forge/kiln.git` — kiln CLI for dispatching approved proposals
+
+```bash
+uv add "kiln @ git+https://github.com/bread-forge/kiln.git"
+```
+
 ## Modules
 
 - `dispatch/kiln`: KilnDispatcher; subprocess invoker; run-id extractor

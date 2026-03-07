@@ -28,6 +28,11 @@ measured against actual kiln plan node counts.
   and the restructured spec re-enters the synthesis queue
 - All tests pass; new tests cover PEAgent, dependency detection, reject/restructure flows
 
+## Dependencies
+
+Add to `pyproject.toml` before building:
+- `anthropic>=0.40` — Anthropic SDK for PEAgent LLM calls (ensure present from v0.2.0)
+
 ## Modules
 
 - `synthesis/pe`: PEAgent class; dependency detection; complexity heuristics

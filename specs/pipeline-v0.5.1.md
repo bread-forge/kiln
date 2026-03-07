@@ -32,6 +32,10 @@ MergeHandler polls before merging — blocking merge on verification failure.
 - Kiln MergeHandler update is in-scope: modify `src/kiln/graph/handlers/merge.py` to
   poll for pipeline status check before merging
 
+## Dependencies
+
+No new dependencies beyond what is already in `pyproject.toml`.
+
 ## Modules
 
 - `verification/qe_verifier`: QEVerifier; assertion runner; VerificationResult

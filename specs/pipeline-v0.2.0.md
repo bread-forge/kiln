@@ -25,6 +25,15 @@ gate now shows QE-generated validation sections prominently.
 - **[P2]** `--no-qe` flag on `pipeline run` to skip synthesis (faster, for testing)
 - All tests pass; new tests cover QEAgent with mocked Anthropic API, assertion checker
 
+## Dependencies
+
+Add to `pyproject.toml` before building:
+- `anthropic>=0.40` — Anthropic SDK for QEAgent LLM calls
+
+```bash
+uv add "anthropic>=0.40"
+```
+
 ## Modules
 
 - `synthesis/qe`: QEAgent class; system prompt; assertion format parser

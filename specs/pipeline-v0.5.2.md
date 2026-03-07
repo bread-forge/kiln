@@ -32,6 +32,10 @@ from v0.5.1, these three agents form the complete verification tier.
 - Coverage regression requires repo to report coverage (pytest-cov or codecov); skipped otherwise
 - Test count delta: read from pytest JSON report (`--json-report` plugin); fallback: skip
 
+## Dependencies
+
+No new dependencies beyond what is already in `pyproject.toml`.
+
 ## Modules
 
 - `verification/pe_verifier`: PEVerifier; dep diff, env var diff, CI YAML check

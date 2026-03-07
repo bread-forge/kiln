@@ -25,6 +25,11 @@ product prioritization. The gate queue is now clean, ordered, and suppression-fi
   which proposals were suppressed and why
 - All tests pass; new tests cover dedup, topological sort, staleness ranking, conflict detection
 
+## Dependencies
+
+Add to `pyproject.toml` before building:
+- `anthropic>=0.40` — Anthropic SDK for PMAgent LLM calls (ensure present from v0.2.0)
+
 ## Modules
 
 - `synthesis/pm`: PMAgent; dedup logic; topological sorter; staleness ranker
