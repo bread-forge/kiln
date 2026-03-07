@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from kiln.graph.executor import ExecutionGraph
 
 import typer  # noqa: E402
-from beads import BeadStore, GraphNode  # noqa: E402
+from beads import BeadStore, GraphNode, PreflightBead, PRBead, WorkBead  # noqa: E402
 from rich.console import Console, Group  # noqa: E402
 from rich.table import Table  # noqa: E402
 
@@ -58,6 +58,9 @@ app.add_typer(repo_app, name="repo")
 
 graph_app = typer.Typer(help="Inspect and manage graph execution nodes.")
 app.add_typer(graph_app, name="graph")
+
+bead_app = typer.Typer(help="Read and write beads from CC orchestrator sessions.")
+app.add_typer(bead_app, name="bead")
 
 
 # ---------------------------------------------------------------------------
@@ -1175,6 +1178,38 @@ def preflight(
 
     result = _asyncio.run(run_preflight(spec_text, local_path))
 
+    # Write preflight bead and fire hook (best-effort, non-fatal).
+    if repo:
+        try:
+            import uuid
+            from kiln.hooks import fire
+
+            config = Config.from_env(repo)
+            store = _get_store(config)
+            pfbead = PreflightBead(
+                id=str(uuid.uuid4()),
+                repo=repo,
+                spec_file=str(spec),
+                route=result.route,
+                score=result.total,
+                confidence=result.confidence,
+                volume=result.volume.score,
+                novelty=result.novelty.score,
+                ambiguity=result.ambiguity.score,
+                cross_cutting=result.cross_cutting.score,
+                summary=result.summary,
+            )
+            store.write_preflight_bead(pfbead)
+            fire("on-preflight", {
+                "KILN_REPO": repo,
+                "KILN_SPEC": str(spec),
+                "KILN_ROUTE": result.route,
+                "KILN_SCORE": str(result.total),
+                "KILN_CONFIDENCE": f"{result.confidence:.2f}",
+            })
+        except Exception:
+            pass
+
     if json_output:
         import dataclasses
         console.print(json.dumps({
@@ -1440,6 +1475,181 @@ def beads_cmd(
     state: Annotated[str | None, typer.Option()] = None,
 ) -> None:
     """Show all beads for a repo."""
+    repo = _require_repo(repo)
+    config = Config.from_env(repo)
+    store = _get_store(config)
+
+    work_beads = store.list_work_beads(state=state)  # type: ignore
+    pr_beads = store.list_pr_beads()
+
+    console.print(f"\n[bold]Work Beads[/bold] ({len(work_beads)})")
+    for b in sorted(work_beads, key=lambda x: x.issue_number):
+        console.print(f"  #{b.issue_number:4}  {b.state:15}  {b.title[:50]}")
+
+    console.print(f"\n[bold]PR Beads[/bold] ({len(pr_beads)})")
+    for b in sorted(pr_beads, key=lambda x: x.pr_number):
+        console.print(f"  PR #{b.pr_number:4}  {b.state:15}  issue #{b.issue_number}")
+
+
+# ---------------------------------------------------------------------------
+# kiln bead — CC orchestrator bead write commands
+# ---------------------------------------------------------------------------
+
+
+@bead_app.command(name="claim")
+def bead_claim(
+    issue: Annotated[int, typer.Argument(help="GitHub issue number.")],
+    title: Annotated[str, typer.Argument(help="Issue title.")],
+    repo: Annotated[str | None, typer.Option(help="owner/repo")] = None,
+    branch: Annotated[str | None, typer.Option(help="Branch name (e.g. 42-fix-bug).")] = None,
+    milestone: Annotated[str | None, typer.Option(help="Milestone slug.")] = None,
+) -> None:
+    """Record a claimed issue as a WorkBead (state=claimed).
+
+    Call this after `gh issue edit <N> --add-label in-progress`.
+    Fires the on-claim hook if installed.
+    """
+    from kiln.hooks import fire
+
+    repo = _require_repo(repo)
+    config = Config.from_env(repo)
+    store = _get_store(config)
+
+    existing = store.read_work_bead(issue)
+    if existing:
+        existing.state = "claimed"  # type: ignore[assignment]
+        if branch:
+            existing.branch = branch
+        if milestone:
+            existing.milestone = milestone
+        store.write_work_bead(existing)
+        bead = existing
+    else:
+        bead = WorkBead(
+            issue_number=issue,
+            repo=repo,
+            title=title,
+            state="claimed",
+            branch=branch,
+            milestone=milestone,
+        )
+        store.write_work_bead(bead)
+
+    fire("on-claim", {
+        "KILN_REPO": repo,
+        "KILN_ISSUE": str(issue),
+        "KILN_TITLE": title,
+        "KILN_BRANCH": branch or "",
+        "KILN_MILESTONE": milestone or "",
+    })
+    console.print(f"[green]claimed[/green]  #{issue}  {title[:60]}")
+
+
+@bead_app.command(name="pr")
+def bead_pr(
+    issue: Annotated[int, typer.Argument(help="GitHub issue number.")],
+    pr: Annotated[int, typer.Argument(help="GitHub PR number.")],
+    repo: Annotated[str | None, typer.Option(help="owner/repo")] = None,
+    branch: Annotated[str | None, typer.Option(help="Branch name.")] = None,
+) -> None:
+    """Record a PR as a PRBead and update the WorkBead to pr_open.
+
+    Call this after `gh pr create`.
+    Fires the on-pr-open hook if installed.
+    """
+    from kiln.hooks import fire
+
+    repo = _require_repo(repo)
+    config = Config.from_env(repo)
+    store = _get_store(config)
+
+    branch_val = branch or f"{issue}-branch"
+    pr_bead = PRBead(pr_number=pr, repo=repo, issue_number=issue, branch=branch_val)
+    store.write_pr_bead(pr_bead)
+
+    work = store.read_work_bead(issue)
+    if work:
+        work.state = "pr_open"  # type: ignore[assignment]
+        work.pr_number = pr
+        if branch:
+            work.branch = branch
+        store.write_work_bead(work)
+
+    fire("on-pr-open", {
+        "KILN_REPO": repo,
+        "KILN_ISSUE": str(issue),
+        "KILN_PR": str(pr),
+        "KILN_BRANCH": branch_val,
+    })
+    console.print(f"[green]pr-open[/green]  #{issue} → PR #{pr}")
+
+
+@bead_app.command(name="merge")
+def bead_merge(
+    pr: Annotated[int, typer.Argument(help="GitHub PR number.")],
+    repo: Annotated[str | None, typer.Option(help="owner/repo")] = None,
+) -> None:
+    """Mark a PR as merged — update PRBead to merged, WorkBead to closed.
+
+    Call this after `gh pr merge`.
+    Fires the on-merge hook if installed.
+    """
+    from kiln.hooks import fire
+
+    repo = _require_repo(repo)
+    config = Config.from_env(repo)
+    store = _get_store(config)
+
+    pr_bead = store.read_pr_bead(pr)
+    issue_number = 0
+    if pr_bead:
+        issue_number = pr_bead.issue_number
+        pr_bead.state = "merged"  # type: ignore[assignment]
+        store.write_pr_bead(pr_bead)
+        work = store.read_work_bead(pr_bead.issue_number)
+        if work:
+            work.state = "closed"  # type: ignore[assignment]
+            store.write_work_bead(work)
+
+    fire("on-merge", {
+        "KILN_REPO": repo,
+        "KILN_PR": str(pr),
+        "KILN_ISSUE": str(issue_number),
+    })
+    console.print(f"[green]merged[/green]  PR #{pr}  (issue #{issue_number})")
+
+
+@bead_app.command(name="abandon")
+def bead_abandon(
+    issue: Annotated[int, typer.Argument(help="GitHub issue number.")],
+    repo: Annotated[str | None, typer.Option(help="owner/repo")] = None,
+) -> None:
+    """Mark an issue as abandoned — update WorkBead to abandoned.
+
+    Call this when cleaning up stale in-progress labels.
+    Fires the on-abandon hook if installed.
+    """
+    from kiln.hooks import fire
+
+    repo = _require_repo(repo)
+    config = Config.from_env(repo)
+    store = _get_store(config)
+
+    work = store.read_work_bead(issue)
+    if work:
+        work.state = "abandoned"  # type: ignore[assignment]
+        store.write_work_bead(work)
+
+    fire("on-abandon", {"KILN_REPO": repo, "KILN_ISSUE": str(issue)})
+    console.print(f"[yellow]abandoned[/yellow]  #{issue}")
+
+
+@bead_app.command(name="list")
+def bead_list(
+    repo: Annotated[str | None, typer.Option(help="owner/repo")] = None,
+    state: Annotated[str | None, typer.Option(help="Filter by WorkBead state.")] = None,
+) -> None:
+    """List work and PR beads for a repo."""
     repo = _require_repo(repo)
     config = Config.from_env(repo)
     store = _get_store(config)
