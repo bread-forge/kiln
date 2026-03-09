@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from kiln.graph.executor import ExecutionGraph
 
 import typer  # noqa: E402
-from beads import BeadStore, GraphNode, PreflightBead, PRBead, WorkBead  # noqa: E402
+from beads import BeadStore, GraphNode, PRBead, PreflightBead, WorkBead  # noqa: E402
 from rich.console import Console, Group  # noqa: E402
 from rich.table import Table  # noqa: E402
 
@@ -51,6 +51,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+_err_console = Console(stderr=True)
 
 
 repo_app = typer.Typer(help="Manage platform repo registry.")
@@ -417,8 +418,11 @@ def _register_runner(repo: str) -> None:
     # Check if an online runner already exists
     r = subprocess.run(
         [
-            "gh", "api", f"repos/{repo}/actions/runners",
-            "--jq", '[.runners[] | select(.status == "online")] | length',
+            "gh",
+            "api",
+            f"repos/{repo}/actions/runners",
+            "--jq",
+            '[.runners[] | select(.status == "online")] | length',
         ],
         capture_output=True,
         text=True,
@@ -463,8 +467,13 @@ def _register_runner(repo: str) -> None:
     # Get registration token
     token_r = subprocess.run(
         [
-            "gh", "api", f"repos/{repo}/actions/runners/registration-token",
-            "--method", "POST", "--jq", ".token",
+            "gh",
+            "api",
+            f"repos/{repo}/actions/runners/registration-token",
+            "--method",
+            "POST",
+            "--jq",
+            ".token",
         ],
         capture_output=True,
         text=True,
@@ -478,10 +487,14 @@ def _register_runner(repo: str) -> None:
         [
             str(config_sh),
             "--unattended",
-            "--url", f"https://github.com/{repo}",
-            "--token", token,
-            "--name", runner_name,
-            "--labels", "self-hosted",
+            "--url",
+            f"https://github.com/{repo}",
+            "--token",
+            token,
+            "--name",
+            runner_name,
+            "--labels",
+            "self-hosted",
             "--replace",
         ],
         cwd=runner_dir,
@@ -715,9 +728,7 @@ def _print_dry_run_summary(
 
     # Find the most recent done plan node (prefer plan-refine over initial plan)
     # and collect all initial unknowns to compute what was resolved.
-    all_done_plans = [
-        n for n in graph.all_nodes() if n.type == "plan" and n.state == "done"
-    ]
+    all_done_plans = [n for n in graph.all_nodes() if n.type == "plan" and n.state == "done"]
     # Sort by completed_at descending; fall back to id-based ordering (refine > initial)
     all_done_plans.sort(
         key=lambda n: (n.completed_at or n.created_at, "refine" in n.id),
@@ -736,15 +747,19 @@ def _print_dry_run_summary(
             f"[dim]Risk:[/dim] {', '.join(artifact.get('risk_flags', [])) or 'none'}"
         )
         # Show unknowns that were resolved (initial unknowns minus remaining)
-        initial_unknowns = set(
-            (initial_plan.output.get("artifact") or {}).get("unknowns", [])
-        ) if initial_plan else set()
+        initial_unknowns = (
+            set((initial_plan.output.get("artifact") or {}).get("unknowns", []))
+            if initial_plan
+            else set()
+        )
         remaining_unknowns = set(artifact.get("unknowns", []))
         resolved = initial_unknowns - remaining_unknowns
         if resolved:
             console.print(f"[dim]Unknowns resolved:[/dim] {', '.join(list(resolved)[:3])}")
         if remaining_unknowns:
-            console.print(f"[dim]Remaining unknowns:[/dim] {', '.join(list(remaining_unknowns)[:3])}")
+            console.print(
+                f"[dim]Remaining unknowns:[/dim] {', '.join(list(remaining_unknowns)[:3])}"
+            )
 
     if not build_nodes:
         console.print("[yellow]No build nodes emitted — check plan output above.[/yellow]")
@@ -804,7 +819,10 @@ def run(
     ] = None,
     max_research_rounds: Annotated[
         int,
-        typer.Option("--max-research-rounds", help="Max research rounds before hard-failing on low confidence (default 2)."),
+        typer.Option(
+            "--max-research-rounds",
+            help="Max research rounds before hard-failing on low confidence (default 2).",
+        ),
     ] = 2,
 ) -> None:
     """Parse spec(s), file GitHub issues, and dispatch agents."""
@@ -1147,7 +1165,16 @@ def preflight(
     repo: Annotated[str | None, typer.Option(help="owner/repo for codebase context.")] = None,
     repo_path: Annotated[str | None, typer.Option(help="Local path to repo checkout.")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
-    with_proof: Annotated[bool, typer.Option("--proof", help="Run proof research before scoring.")] = False,
+    with_proof: Annotated[
+        bool, typer.Option("--proof", help="Run proof research before scoring.")
+    ] = False,
+    research_context: Annotated[
+        Path | None,
+        typer.Option(
+            "--research-context",
+            help="Path to existing proof findings (markdown). Re-scores without re-running research.",
+        ),
+    ] = None,
 ) -> None:
     """Decide whether a spec should run in Claude Code (CC) or kiln (autonomous batch).
 
@@ -1156,6 +1183,9 @@ def preflight(
 
     With --proof: extracts unknowns, runs parallel web research, then re-scores
     with findings as context. Produces a more accurate signal on novelty and ambiguity.
+
+    With --research-context: reads pre-existing proof findings from a file and
+    re-scores with them injected. Use after `proof run --out findings.md`.
     """
     import asyncio as _asyncio
 
@@ -1181,8 +1211,15 @@ def preflight(
                 break
 
     fast_result = None
-    if with_proof:
-        console.print("[dim]Running fast preflight...[/dim]", stderr=True)
+    if research_context is not None:
+        if not research_context.exists():
+            console.print(f"[red]error:[/red] research context file not found: {research_context}")
+            raise typer.Exit(1)
+        findings = research_context.read_text(encoding="utf-8")
+        _err_console.print(f"[dim]Re-scoring with research context from {research_context}…[/dim]")
+        result = _asyncio.run(run_preflight(spec_text, local_path, research_findings=findings))
+    elif with_proof:
+        _err_console.print("[dim]Running fast preflight...[/dim]")
         import contextlib
 
         store_for_proof = None
@@ -1193,10 +1230,10 @@ def preflight(
             run_preflight_with_proof(spec_text, local_path, repo=repo or "", store=store_for_proof)
         )
         if refined is not None:
-            console.print("[dim]Proof complete — re-scoring with research context.[/dim]", stderr=True)
+            _err_console.print("[dim]Proof complete — re-scoring with research context.[/dim]")
             result = refined
         else:
-            console.print("[dim]No unknowns found — using fast score.[/dim]", stderr=True)
+            _err_console.print("[dim]No unknowns found — using fast score.[/dim]")
             result = fast_result
     else:
         result = _asyncio.run(run_preflight(spec_text, local_path))
@@ -1224,42 +1261,62 @@ def preflight(
                 summary=result.summary,
             )
             store.write_preflight_bead(pfbead)
-            fire("on-preflight", {
-                "KILN_REPO": repo,
-                "KILN_SPEC": str(spec),
-                "KILN_ROUTE": result.route,
-                "KILN_SCORE": str(result.total),
-                "KILN_CONFIDENCE": f"{result.confidence:.2f}",
-            })
+            fire(
+                "on-preflight",
+                {
+                    "KILN_REPO": repo,
+                    "KILN_SPEC": str(spec),
+                    "KILN_ROUTE": result.route,
+                    "KILN_SCORE": str(result.total),
+                    "KILN_CONFIDENCE": f"{result.confidence:.2f}",
+                },
+            )
         except Exception:
             pass
 
     if json_output:
-        console.print(json.dumps({
-            "route": result.route,
-            "total": result.total,
-            "confidence": round(result.confidence, 2),
-            "summary": result.summary,
-            "signals": {
-                "volume": {"score": result.volume.score, "reason": result.volume.reason},
-                "novelty": {"score": result.novelty.score, "reason": result.novelty.reason},
-                "ambiguity": {"score": result.ambiguity.score, "reason": result.ambiguity.reason},
-                "cross_cutting": {"score": result.cross_cutting.score, "reason": result.cross_cutting.reason},
-            },
-        }, indent=2))
+        console.print(
+            json.dumps(
+                {
+                    "route": result.route,
+                    "total": result.total,
+                    "confidence": round(result.confidence, 2),
+                    "summary": result.summary,
+                    "signals": {
+                        "volume": {"score": result.volume.score, "reason": result.volume.reason},
+                        "novelty": {"score": result.novelty.score, "reason": result.novelty.reason},
+                        "ambiguity": {
+                            "score": result.ambiguity.score,
+                            "reason": result.ambiguity.reason,
+                        },
+                        "cross_cutting": {
+                            "score": result.cross_cutting.score,
+                            "reason": result.cross_cutting.reason,
+                        },
+                    },
+                },
+                indent=2,
+            )
+        )
         return
 
     route_color = "green" if result.route == "kiln" else "yellow"
-    route_label = "kiln (autonomous batch)" if result.route == "kiln" else "Claude Code (interactive)"
+    route_label = (
+        "kiln (autonomous batch)" if result.route == "kiln" else "Claude Code (interactive)"
+    )
     proof_tag = " [dim](proof-informed)[/dim]" if fast_result is not None else ""
-    console.print(f"\nRoute: [{route_color}]{route_label}[/{route_color}]  (score {result.total}/8, confidence {result.confidence:.0%}){proof_tag}\n")
+    console.print(
+        f"\nRoute: [{route_color}]{route_label}[/{route_color}]  (score {result.total}/8, confidence {result.confidence:.0%}){proof_tag}\n"
+    )
     if fast_result is not None and fast_result.total != result.total:
-        console.print(f"  [dim]Fast score: {fast_result.total}/8 → refined: {result.total}/8[/dim]\n")
+        console.print(
+            f"  [dim]Fast score: {fast_result.total}/8 → refined: {result.total}/8[/dim]\n"
+        )
 
     signal_rows = [
-        ("volume",        result.volume),
-        ("novelty",       result.novelty),
-        ("ambiguity",     result.ambiguity),
+        ("volume", result.volume),
+        ("novelty", result.novelty),
+        ("ambiguity", result.ambiguity),
         ("cross_cutting", result.cross_cutting),
     ]
     for name, sig in signal_rows:
@@ -1561,13 +1618,16 @@ def bead_claim(
         )
         store.write_work_bead(bead)
 
-    fire("on-claim", {
-        "KILN_REPO": repo,
-        "KILN_ISSUE": str(issue),
-        "KILN_TITLE": title,
-        "KILN_BRANCH": branch or "",
-        "KILN_MILESTONE": milestone or "",
-    })
+    fire(
+        "on-claim",
+        {
+            "KILN_REPO": repo,
+            "KILN_ISSUE": str(issue),
+            "KILN_TITLE": title,
+            "KILN_BRANCH": branch or "",
+            "KILN_MILESTONE": milestone or "",
+        },
+    )
     console.print(f"[green]claimed[/green]  #{issue}  {title[:60]}")
 
 
@@ -1601,12 +1661,15 @@ def bead_pr(
             work.branch = branch
         store.write_work_bead(work)
 
-    fire("on-pr-open", {
-        "KILN_REPO": repo,
-        "KILN_ISSUE": str(issue),
-        "KILN_PR": str(pr),
-        "KILN_BRANCH": branch_val,
-    })
+    fire(
+        "on-pr-open",
+        {
+            "KILN_REPO": repo,
+            "KILN_ISSUE": str(issue),
+            "KILN_PR": str(pr),
+            "KILN_BRANCH": branch_val,
+        },
+    )
     console.print(f"[green]pr-open[/green]  #{issue} → PR #{pr}")
 
 
@@ -1637,11 +1700,14 @@ def bead_merge(
             work.state = "closed"  # type: ignore[assignment]
             store.write_work_bead(work)
 
-    fire("on-merge", {
-        "KILN_REPO": repo,
-        "KILN_PR": str(pr),
-        "KILN_ISSUE": str(issue_number),
-    })
+    fire(
+        "on-merge",
+        {
+            "KILN_REPO": repo,
+            "KILN_PR": str(pr),
+            "KILN_ISSUE": str(issue_number),
+        },
+    )
     console.print(f"[green]merged[/green]  PR #{pr}  (issue #{issue_number})")
 
 
@@ -1994,8 +2060,11 @@ def eval(
 
     nodes = store.list_nodes()
     plan_nodes = [
-        n for n in nodes
-        if n.type == "plan" and n.state in ("done", "already-done") and n.output
+        n
+        for n in nodes
+        if n.type == "plan"
+        and n.state in ("done", "already-done")
+        and n.output
         and (not milestone or n.context.get("milestone", "").startswith(milestone))
     ]
 
@@ -2059,9 +2128,7 @@ def eval(
             modules_changed += 1
         approach_rows.append((mod, base_words, final_words, changed))
 
-    console.print(
-        f"  Approaches:     {modules_changed}/{len(final.modules)} modules changed"
-    )
+    console.print(f"  Approaches:     {modules_changed}/{len(final.modules)} modules changed")
     if approach_rows:
         tbl = Table(show_header=True, box=None, padding=(0, 2))
         tbl.add_column("Module")
@@ -2574,7 +2641,9 @@ def _launch_dashboard_tui(show_cost: bool = False) -> None:
 
     def _node_label(node: dict, ms_prefix: str = "") -> str:
         nid = node.get("id", "?")
-        display_id = nid[len(ms_prefix):].lstrip("-") if ms_prefix and nid.startswith(ms_prefix) else nid
+        display_id = (
+            nid[len(ms_prefix) :].lstrip("-") if ms_prefix and nid.startswith(ms_prefix) else nid
+        )
         state = node.get("state", "?")
         ntype = node.get("type", "")
         color = _STATE_COLOR.get(state, "white")
@@ -2745,7 +2814,9 @@ def _launch_dashboard_tui(show_cost: bool = False) -> None:
             for repo, ms, nodes in rows:
                 if repo != last_repo:
                     total_cost = repo_cost.get(repo, 0.0)
-                    cost_suffix = f"  [dim]${total_cost:.2f}[/dim]" if (show_cost and total_cost) else ""
+                    cost_suffix = (
+                        f"  [dim]${total_cost:.2f}[/dim]" if (show_cost and total_cost) else ""
+                    )
                     repo_node = tree.root.add(
                         f"[cyan bold]{repo}[/cyan bold]{cost_suffix}",
                         expand=repo in restore_expanded,
@@ -2803,14 +2874,17 @@ def _launch_dashboard_tui(show_cost: bool = False) -> None:
                     return (4, "other")
 
                 from itertools import groupby as _groupby
+
                 stage_sorted = sorted(nodes, key=lambda n: (_stage_key(n), n.get("id", "")))
                 for (_, stage_label), group_iter in _groupby(stage_sorted, key=_stage_key):
                     group_nodes = list(group_iter)
                     stage_key = f"{ms_key}/{stage_label}"
                     grp = ms_node.add(
                         f"[dim]{stage_label}  ({len(group_nodes)})[/dim]",
-                        expand=stage_key in restore_expanded or any(
-                            n.get("state") in ("running", "failed", "abandoned") for n in group_nodes
+                        expand=stage_key in restore_expanded
+                        or any(
+                            n.get("state") in ("running", "failed", "abandoned")
+                            for n in group_nodes
                         ),
                         data={"key": stage_key},
                     )
